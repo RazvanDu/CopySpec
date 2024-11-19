@@ -89,14 +89,22 @@ class SpeculativeDecoder:
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
         attention_mask = torch.ones_like(input_ids)
         
-        for _ in range(0, max_new_tokens, gamma + 1):
+        while True:
             # Generate draft outputs
+
+            # EDIT FOR EXACTLY THE SAME SIZE
+            left_to_do = max_new_tokens - (input_ids.size(1) - len(self.tokenizer.encode(prompt)))
+            gamma = min(gamma, left_to_do-1)
+
+            if gamma <= 0:
+                break
+
             with torch.no_grad():
                 draft_outputs = self.draft_model.generate(
                     input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=gamma,
-                    do_sample=True,
+                    #do_sample=True,
                     temperature=temperature,
                     top_k=top_k,
                     top_p=top_p,
@@ -114,17 +122,27 @@ class SpeculativeDecoder:
                     return_dict=True,
                 )
             
-            target_logits = target_outputs.logits[:, input_ids.size(1)-1:-1]
+            #target_logits = target_outputs.logits[:, input_ids.size(1)-1:-1]
+            # THIS IS CHANGED FOR EXACT SAME OUTPUTS
+            target_logits = target_outputs.logits[:, input_ids.size(1)-1:]
             target_probs = self.sample(target_logits, temperature, top_k, top_p)
+
+            # print("AAA", target_probs)
             
             # Speculative sampling
             accepted_tokens = []
             for i in range(gamma):
                 draft_token = draft_tokens[:, i]
+
+                #print("TTT", draft_token)
+                #print("WWW", torch.argmax(target_probs[:, i]))
+
                 draft_prob = draft_probs[i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
                 target_prob = target_probs[:, i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
                 
                 accept_prob = torch.min(torch.ones_like(target_prob), target_prob / draft_prob)
+                #print("T", target_prob)
+                #print("D", draft_prob)
                 if torch.rand(1, device=self.device) < accept_prob:
                     accepted_tokens.append(draft_token)
                 else:
@@ -139,6 +157,10 @@ class SpeculativeDecoder:
                 #         break
             
             num_accepted = len(accepted_tokens)
+
+            i += num_accepted
+
+            print(num_accepted)
             
             if num_accepted < gamma:
                 adjusted_probs = torch.clamp(target_probs[:, num_accepted] - draft_probs[num_accepted], min=0)
@@ -153,11 +175,10 @@ class SpeculativeDecoder:
             input_ids = torch.cat([input_ids, new_tokens], dim=1)
             attention_mask = torch.cat([attention_mask, torch.ones_like(new_tokens)], dim=1) #update for next generation
             
-            if input_ids.size(1) - len(self.tokenizer.encode(prompt)) >= max_new_tokens:
-                break
+            #if input_ids.size(1) - len(self.tokenizer.encode(prompt)) >= max_new_tokens:
+            #    break
         
         return self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
-
 
     def target_generate_greedy(self, prompt, max_new_tokens=50):
         """
@@ -171,7 +192,7 @@ class SpeculativeDecoder:
             str: The generated text.
         """
         model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens)
+        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens, temperature=0.0)
         return self.tokenizer.decode(greedy_output[0])
 
     def draft_generate_greedy(self, prompt, max_new_tokens=50):

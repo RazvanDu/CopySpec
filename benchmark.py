@@ -1,6 +1,7 @@
 import time
 from speculative_decoding import SpeculativeDecoder
 from typing import Tuple
+import torch
 
 def benchmark(
     main_model_name: str,
@@ -20,16 +21,19 @@ def benchmark(
     prompt = "Once upon a time,"
     
     start_time = time.time()
+    torch.manual_seed(123)
     greedy_output = decoder.target_generate_greedy(
         prompt,
         max_new_tokens=max_tokens,
     )
+
     greedy_decoding_runtime = time.time() - start_time
 
     start_time = time.time()
+    torch.manual_seed(123)
     spec_output = decoder.generate(
         prompt,
-        temperature=1.0,
+        temperature=0.0,
         top_k=top_k,
         top_p=top_p,
         gamma=5,
@@ -63,7 +67,7 @@ def benchmark_v2(
     top_p: float,
     top_k: int,
     max_tokens: int,
-    num_runs: int = 5
+    num_runs: int = 1
 ) -> Tuple[float, float, float, float]:
     """
     Runs speculative decoding and compares it against greedy decoding with the main model.
@@ -81,7 +85,11 @@ def benchmark_v2(
                     avg_spec_tokens_per_second, avg_greedy_tokens_per_second)
     """
     decoder = SpeculativeDecoder(main_model_name, draft_model_name)
-    prompt = "Once upon a time,"
+    prompt = """
+    "This is just a random sentence that we use to test that the technique works, it doesn't matter what is written here."
+
+    Please write the first sentence exactly as it is written: 
+    """
 
     spec_runtimes = []
     greedy_runtimes = []
@@ -91,12 +99,13 @@ def benchmark_v2(
     for _ in range(num_runs):
         # Benchmark speculative decoding
         start_time = time.time()
+        torch.manual_seed(123)
         spec_output = decoder.generate(
             prompt,
-            temperature=1.0,
+            temperature=0.0,
             top_k=top_k,
             top_p=top_p,
-            gamma=5,
+            gamma=10,
             max_new_tokens=max_tokens
         )
         spec_runtime = time.time() - start_time
@@ -107,6 +116,7 @@ def benchmark_v2(
 
         # Benchmark target greedy decoding
         start_time = time.time()
+        torch.manual_seed(123)
         greedy_output = decoder.target_generate_greedy(
             prompt,
             max_new_tokens=max_tokens,
@@ -143,7 +153,7 @@ if __name__ == '__main__':
     draft_model = "distilgpt2"
     top_p = 1
     top_k = 0
-    max_tokens = 100
+    max_tokens = 200
 
     # spec_time, greedy_time = benchmark(main_model, draft_model, top_p, top_k, max_tokens)
     # print(f"\nSpeculative Decoding Runtime: {spec_time:.2f} seconds")

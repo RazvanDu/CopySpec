@@ -88,3 +88,5 @@ Contributions to improve the implementation or extend its functionality are welc
 ## 🙏 Acknowledgements
 
 This implementation is based on the research presented in ["Fast Inference from Transformers via Speculative Decoding"](https://arxiv.org/abs/2211.17192). 
+
+# SpeculativeCopying
