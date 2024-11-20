@@ -43,6 +43,7 @@ class SpeculativeDecoder:
         # Iterate over the tokenized prompt to generate groups of k tokens
         for i in range(len(token_ids) - k + 1):
             token_group = tuple(token_ids[i:i + k])  # Extract k consecutive tokens
+            print(token_group)
             token_hash = hash(token_group)  # Hash the group
             
             # Add the hash to the dictionary, recording the position
@@ -50,14 +51,17 @@ class SpeculativeDecoder:
                 self.copy_dict[token_hash] = []
             self.copy_dict[token_hash].append(i)  # Append the starting position of the group
 
-    def find_text_position(self, text):
+    def find_text_position(self, input_ids):
         # Tokenize the input text
-        token_ids = self.tokenizer.encode(text, return_tensors="pt").to(self.device).squeeze(0).tolist()
+        # print("BBB", text)
 
-        print("AAA", len(token_ids))
+        #token_ids = self.tokenizer.encode(text, return_tensors="pt").to(self.device).squeeze(0).tolist()
+    
+        # print("CCC", self.tokenizer.encode(text, return_tensors="pt").to(self.device))
+        # print("AAA", tuple(token_ids))
 
         # Hash the tokenized group
-        token_hash = hash(tuple(token_ids))
+        token_hash = hash(input_ids)
 
         # Check if the hash exists in the dictionary
         if token_hash in self.copy_dict:
@@ -119,7 +123,7 @@ class SpeculativeDecoder:
 
         self.preprocess_prompt(input_ids, gamma)
 
-        print(self.find_text_position("random sentence that"))
+        # print(self.find_text_position("sentence that"), gamma)
 
         attention_mask = torch.ones_like(input_ids)
         
@@ -207,7 +211,20 @@ class SpeculativeDecoder:
             new_tokens = torch.cat([token.view(1, 1) for token in accepted_tokens], dim=1)
             
             input_ids = torch.cat([input_ids, new_tokens], dim=1)
-            attention_mask = torch.cat([attention_mask, torch.ones_like(new_tokens)], dim=1) #update for next generation
+            attention_mask = torch.cat([attention_mask, torch.ones_like(new_tokens)], dim=1)
+
+            new_token_ids = new_tokens.squeeze(0).tolist()
+            all_token_ids = input_ids.squeeze(0).tolist()
+            start_idx = max(0, len(all_token_ids) - len(new_token_ids) - gamma + 1)
+
+            for j in range(start_idx, len(all_token_ids) - gamma + 1):
+                token_group = tuple(all_token_ids[j:j + gamma])
+                token_hash = hash(token_group)
+                start_pos = j
+
+                if token_hash not in self.copy_dict:
+                    self.copy_dict[token_hash] = []
+                self.copy_dict[token_hash].append(start_pos)
             
             #print("CURRENT", self.tokenizer.decode(new_tokens[0], skip_special_tokens=True))
 

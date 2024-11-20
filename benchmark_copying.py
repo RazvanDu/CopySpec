@@ -1,5 +1,5 @@
 import time
-from speculative_decoding import SpeculativeDecoder
+from speculative_copying import SpeculativeDecoder
 from typing import Tuple
 import torch
 
@@ -105,7 +105,7 @@ def benchmark_v2(
             temperature=0.0,
             top_k=top_k,
             top_p=top_p,
-            gamma=10,
+            gamma=3,
             max_new_tokens=max_tokens
         )
         spec_runtime = time.time() - start_time
