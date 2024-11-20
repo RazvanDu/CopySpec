@@ -304,7 +304,7 @@ def modify_json_with_changes(original_json, num_changes):
 
 
 # Generate dataset with random modifications
-num_samples = 1000
+num_samples = 100
 dataset = []
 
 for _ in range(num_samples):
