@@ -1,0 +1,1 @@
+The K should be decided by the model output. We can first try k=4, then using the output data calculate Mutual Information again to find best k', probably k'=argmax(MI). Afterwards, we put k' back and see if it improves the speed.
