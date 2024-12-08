@@ -85,10 +85,35 @@ def benchmark_v2(
                     avg_spec_tokens_per_second, avg_greedy_tokens_per_second)
     """
     decoder = SpeculativeDecoder(main_model_name, draft_model_name)
-    prompt = """
-    "This is just a random sentence that we use to test that the technique works, it doesn't matter what is written here."
+    #prompt = """
+    #"This is just a random sentence that we use to test that the technique works, it doesn't matter what is written here."
+    #
+    #Please write the first sentence exactly as it is written:
+    #"""
 
-    Please write the first sentence exactly as it is written:
+    prompt = """
+    Given the following data:
+    ```
+    {
+        ""field"": ""publications[0].url"",
+        ""type"": ""url"",
+        ""old_value"": ""https://en.wikisource.org/wiki/Translation:On_the_Electrodynamics_of_Moving_Bodies"",
+        ""new_value"": ""https://random-site-495.com""
+    },{
+        ""field"": ""publications[1].url"",
+        ""type"": ""url"",
+        ""old_value"": ""https://mail.google.com/mail/u/0/#inbox"",
+        ""new_value"": ""https://shibboleth.arizona.edu/idp/profile/SAML2/Redirect/SSO?execution=e1s2""
+    },{
+        ""field"": ""publications[2].url"",
+        ""type"": ""url"",
+        ""old_value"": ""https://uaccess.arizona.edu/"",
+        ""new_value"": ""https://www.gradescope.com/courses/816391""
+    }
+    ```
+    Write the exact same data back but remove the field ""type"":
+
+    
     """
 
     spec_runtimes = []
@@ -99,12 +124,13 @@ def benchmark_v2(
     for _ in range(num_runs):
         # Benchmark speculative decoding
         start_time = time.time()
-        torch.manual_seed(123)
+        torch.manual_seed(42)
         spec_output = decoder.generate(
             prompt,
             temperature=0.0,
             top_k=top_k,
             top_p=top_p,
+            k=10,
             gamma=3,
             max_new_tokens=max_tokens
         )
@@ -116,7 +142,7 @@ def benchmark_v2(
 
         # Benchmark target greedy decoding
         start_time = time.time()
-        torch.manual_seed(123)
+        torch.manual_seed(42)
         greedy_output = decoder.target_generate_greedy(
             prompt,
             max_new_tokens=max_tokens,
@@ -149,8 +175,8 @@ def benchmark_v2(
     
 if __name__ == '__main__':
     
-    main_model = "gpt2-medium"
-    draft_model = "distilgpt2"
+    main_model = "gpt2-large"
+    draft_model = "gpt2-medium"
     top_p = 1
     top_k = 0
     max_tokens = 400

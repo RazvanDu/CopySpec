@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+cache_directory = "/mnt/razvandu/speculative_decoding/models_cache"
+
 class SpeculativeDecoder:
     """
     A class implementing speculative decoding for language models.
@@ -26,9 +28,10 @@ class SpeculativeDecoder:
             device (str): The device to run the models on. Defaults to 'cuda' if available, else 'cpu'.
         """
         self.device = device
-        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name).to(self.device)
-        self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name).to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained(target_model_name)
+        self.target_config = config = AutoConfig.from_pretrained(target_model_name, cache_dir=cache_directory)
+        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name, cache_dir=cache_directory).to(self.device)
+        self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name, cache_dir=cache_directory).to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(target_model_name, cache_dir=cache_directory)
         self.copy_dict = dict()
         
         if self.tokenizer.pad_token is None:
