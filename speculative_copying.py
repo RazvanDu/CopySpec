@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
-cache_directory = "/mnt/razvandu/speculative_decoding/models_cache"
+cache_directory = "/home/mlyang721/.cache/huggingface/hub"
 
 class SpeculativeDecoder:
     """

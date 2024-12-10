@@ -172,3 +172,7 @@ find_best_k/glove.6B.200d.txt
 find_best_k/glove.6B.300d.txt
 
 dataset/mt-bench
+
+speculative_copying.py
+speculative_decoding.py
+FastChat/fastchat/model/model_adapter.py

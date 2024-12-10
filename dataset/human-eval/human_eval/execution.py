@@ -1,3 +1,4 @@
+
 from typing import Optional, Callable, Dict
 import ast
 import contextlib
@@ -55,7 +56,7 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
 # information on how OpenAI sandboxes its code, see the accompanying paper.
 # Once you have read this disclaimer and taken appropriate precautions, 
 # uncomment the following line and proceed at your own risk:
-#                         exec(check_program, exec_globals)
+                         exec(check_program, exec_globals)
                 result.append("passed")
             except TimeoutException:
                 result.append("timed out")
