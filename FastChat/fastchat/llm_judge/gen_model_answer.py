@@ -162,7 +162,6 @@ def get_model_answers(
                     #print("")
                     print(tokens_accepted, "tokens were accepted!")
                     #print("")
-                    #print("OUTPUT:", output)
                 else:
                     output = decoder.target_generate_greedy(
                         prompt,
@@ -174,6 +173,7 @@ def get_model_answers(
                     #    temperature=temperature,
                     #    max_new_tokens=max_new_token,
                     #)
+                print("OUTPUT:", output)
                 #print("!!!ASDASD")
                 #print("!!!!!!!!!", output)
                 

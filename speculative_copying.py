@@ -170,10 +170,19 @@ class SpeculativeDecoder:
 
                     draft_chunk = all_token_ids[(first_occurrence + gamma): (first_occurrence + gamma + to_add)]
                     draft_tokens = torch.tensor(draft_chunk, device=self.device).unsqueeze(0)
+                    
+                    
+                    
+                    last_token_id = all_token_ids[-1]
+                    last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
+                    draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
+                    
+                    
+                    
                     vocab_size = self.vocab_size
                     draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
                     draft_probs[torch.arange(draft_tokens.size(1)), 0, draft_tokens] = 1
-                    gamma = draft_tokens.size(1)
+                    gamma = draft_tokens.size(1)-1
 
             #if use_specdec and not copied:
             #    last_token_id = all_token_ids[-1]
@@ -197,9 +206,9 @@ class SpeculativeDecoder:
                 #    trimmed_past_key_values.append((trimmed_key, trimmed_value))
                 #target_past_key_values = tuple(trimmed_past_key_values)
 
-                last_token_id = all_token_ids[-1]
-                last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
-                draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
+                #last_token_id = all_token_ids[-1]
+                #last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
+                #draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
 
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
@@ -212,29 +221,29 @@ class SpeculativeDecoder:
                 #print("PROBS SHAPE", target_probs.shape)
 
                 accepted_tokens = []
-                for i in range(gamma):
+                for i in range(gamma+1):
+
+                    if i==gamma:
+                        next_token = torch.multinomial(target_probs[:, i], 1)[0]
+                        accepted_tokens.append(next_token)
+                        break
+
                     draft_token = draft_tokens[:, i+1]
-                    draft_prob = draft_probs[i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
+                    draft_prob = draft_probs[i+1].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
                     #if i == 0:
                     #    target_prob = init_target_probs[:, 0].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
                     #else:
                     target_prob = target_probs[:, i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
                     accept_prob = torch.min(torch.ones_like(target_prob), target_prob / draft_prob)
-                    if torch.rand(1, device=self.device) < accept_prob:
-                        accepted_tokens.append(draft_token)
-                    else:
+                    if accept_prob < 1:
                         #if i == 0:
                         #    adjusted_probs = torch.clamp(init_target_probs[:, 0] - draft_probs[i], min=0)
                         #else:
-                        adjusted_probs = torch.clamp(target_probs[:, i] - draft_probs[i], min=0)
-                        sum_adjusted = adjusted_probs.sum()
-                        if sum_adjusted == 0:
-                            adjusted_probs = torch.ones_like(adjusted_probs)
-                            sum_adjusted = adjusted_probs.sum()
-                        adjusted_probs /= sum_adjusted
-                        next_token = torch.multinomial(adjusted_probs, 1)[0]
+                        next_token = torch.multinomial(target_probs[:, i], 1)[0]
                         accepted_tokens.append(next_token)
                         break
+                    else:
+                        accepted_tokens.append(draft_token)
 
                 #print("OOO", draft_tokens)
                 #print("!!!", self.tokenizer.decode(draft_tokens[0], skip_special_tokens=True))
@@ -243,9 +252,9 @@ class SpeculativeDecoder:
                 num_accepted = len(accepted_tokens)
                 #print(num_accepted)
                 self.total_accepted += num_accepted-1
-                if num_accepted == gamma:
-                    next_token = torch.multinomial(target_probs[:, -1], 1)[0]
-                    accepted_tokens.append(next_token)
+                #if num_accepted == gamma:
+                #    next_token = torch.multinomial(target_probs[:, -1], 1)[0]
+                #    accepted_tokens.append(next_token)
 
                 new_tokens = torch.cat(accepted_tokens)
                 final_length = len(all_token_ids) + num_accepted
