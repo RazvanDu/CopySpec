@@ -186,15 +186,16 @@ class SpeculativeDecoder:
 
             if draft_tokens is not None:
 
-                trimmed_past_key_values = []
-                for layer_past in target_past_key_values:
-                    key, value = layer_past
-                    new_length_key = key.shape[2]-1
-                    new_length_value = value.shape[2]-1
-                    trimmed_key = key[:, :, :new_length_key, :].clone()
-                    trimmed_value = value[:, :, :new_length_value, :].clone()
-                    trimmed_past_key_values.append((trimmed_key, trimmed_value))
-                target_past_key_values = tuple(trimmed_past_key_values)
+                #I think we don't actually need this whopss
+                #trimmed_past_key_values = []
+                #for layer_past in target_past_key_values:
+                #    key, value = layer_past
+                #    new_length_key = key.shape[2]-1
+                #    new_length_value = value.shape[2]-1
+                #    trimmed_key = key[:, :, :new_length_key, :].clone()
+                #    trimmed_value = value[:, :, :new_length_value, :].clone()
+                #    trimmed_past_key_values.append((trimmed_key, trimmed_value))
+                #target_past_key_values = tuple(trimmed_past_key_values)
 
                 last_token_id = all_token_ids[-1]
                 last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)

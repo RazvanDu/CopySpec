@@ -160,7 +160,7 @@ def get_model_answers(
                         max_new_tokens=max_new_token
                     )
                     #print("")
-                    #print(tokens_accepted, "tokens were accepted!")
+                    print(tokens_accepted, "tokens were accepted!")
                     #print("")
                     #print("OUTPUT:", output)
                 else:
