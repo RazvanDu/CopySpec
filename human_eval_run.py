@@ -23,7 +23,7 @@ print(f"Using device: {device}")
 torch.backends.cuda.matmul.allow_tf32 = True  # Allow TF32 on Tensor Cores for faster matrix multiplications
 
 # Load the LLaMA model and tokenizer with Accelerate's device management
-model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Replace with your desired LLaMA model
+model_name = "meta-llama/Llama-3.2-3B-Instruct"  # Replace with your desired LLaMA model
 print(f"Loading model {model_name}...")
 
 # Load tokenizer and model with token-based authentication
@@ -66,17 +66,14 @@ for task in dataset["test"]:
     # Use the prompt for the task
     prompt = task["prompt"]
     canonical_solution = task["canonical_solution"]
-    
-    # Generate masked code
     masked_code = mask_continuous_words(canonical_solution)
     
-    # Create the final prompt
     final_prompt = (
         "Please complete the following incomplete code to match the original solution. "
         "Do not add any extra code or function definitions. Only return the completed code, "
         "without any comments or explanations.\n\n"
-        f"Here is the code:\n\n```{prompt}+{masked_code}```\n\n"
-        "Please provide the completed code:"
+        f"Here is the code:\n\n```{masked_code}```\n\n"
+        "Here is the completed code:"
     )
     
     # Measure time for generation
