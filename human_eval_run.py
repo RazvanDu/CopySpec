@@ -3,7 +3,7 @@ import torch
 import os
 from dotenv import load_dotenv
 from datasets import load_dataset
-from speculative_decoding import SpeculativeDecoder
+from speculative_copying import SpeculativeDecoder
 import time
 from tqdm import tqdm
 

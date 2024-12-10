@@ -49,6 +49,8 @@ class SpeculativeDecoder:
 
         print("TEST", self.max_context_target)
 
+        self.total_accepted = 0
+
         #print("WE CAN AT MOST FIT", self.max_context_size)
         #print(f"Maximum context size: {max_context_size}")
 
@@ -124,227 +126,186 @@ class SpeculativeDecoder:
         #    input_ids = input_ids[:, -max_dim:]  # Retain the last max_dim tokens
         return input_ids
 
-    def generate(self, prompt, temperature=1.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
-        """
-        Generate text using speculative decoding.
-
-        Args:
-            prompt (str): The input prompt to start generation from.
-            temperature (float): The temperature for sampling. Defaults to 1.0.
-            top_k (int): The number of top tokens to consider for top-k sampling. Defaults to 0 (disabled).
-            top_p (float): The cumulative probability threshold for top-p sampling. Defaults to 1.0 (disabled).
-            gamma (int): The number of tokens to generate speculatively in each iteration. Defaults to 5.
-            max_new_tokens (int): The maximum number of new tokens to generate. Defaults to 100.
-
-        Returns:
-            str: The generated text.
-        """
-
+    def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
         use_specdec = False
-
         stored_gamma = gamma
+        prompt_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        self.preprocess_prompt(prompt_ids, gamma)
+        all_token_ids = prompt_ids.squeeze(0).tolist()
+        total_generated = 0
+        target_past_key_values = None
+        draft_past_key_values = None
 
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            target_outputs = self.target_model(prompt_ids, use_cache=True, return_dict=True)
+        target_past_key_values = target_outputs.past_key_values
+        init_target_probs = self.sample(target_outputs.logits[:, -1:], temperature, top_k, top_p)
 
-        self.preprocess_prompt(input_ids, gamma)
+        self.total_accepted = 0
 
-        # print(self.find_text_position("sentence that"), gamma)
-
-        attention_mask = torch.ones_like(input_ids)
-        
         while True:
-
-            # EDIT FOR EXACTLY THE SAME SIZE
-            left_to_do = max_new_tokens - (input_ids.size(1) - len(self.tokenizer.encode(prompt)))
-            gamma = min(gamma, left_to_do-1)
-            gamma = min(gamma, min(self.max_context_draft, self.max_context_target) - input_ids.size(1))
-
-            #print("ZZZ", input_ids.size(1), left_to_do)
-
+            left_to_do = max_new_tokens - total_generated
+            gamma = min(gamma, left_to_do - 1)
             if gamma <= 0:
                 break
+            #print("AFTTT", target_past_key_values[0][0].shape)
+            #print("IIIII", len(all_token_ids))
 
             draft_tokens = None
-
-            all_token_ids = input_ids.squeeze(0).tolist()
+            draft_probs = None
             copied = False
             if len(all_token_ids) >= gamma:
                 last_gamma_tokens = tuple(all_token_ids[-gamma:])
                 token_hash = hash(last_gamma_tokens)
-
-                if token_hash in self.copy_dict and self.copy_dict[token_hash][0]+gamma < len(all_token_ids):
-
+                if token_hash in self.copy_dict and self.copy_dict[token_hash][0] + gamma < len(all_token_ids):
                     copied = True
+                    first_occurrence = self.copy_dict[token_hash][0]
+                    left_tokens = max_new_tokens - total_generated
+                    to_add = min(100, gamma + left_tokens)
 
-                    #print("FOUND A MATCH")
+                    #print("ATTEMPTING TO COPY!")
 
-                    first_occurence = self.copy_dict[token_hash][0]
+                    #print("CURRENT TEXT", self.tokenizer.decode(all_token_ids, skip_special_tokens=True))
+                    #print("LOOKING FOR", self.tokenizer.decode(all_token_ids[-gamma:], skip_special_tokens=True))
 
-                    #print("RRR", first_occurence, gamma, len(all_token_ids), min(len(all_token_ids), first_occurence+100))
-
-                    left_tokens = self.max_context_target - input_ids.size(1)
-                    to_add = min(100, gamma+left_tokens)
-
-                    draft_tokens = input_ids[:, (first_occurence+gamma):(min(len(all_token_ids), first_occurence+to_add))]
-
-                    #print("RRR2", draft_tokens.shape, input_ids.shape)
-
-                    # draft_tokens = draft_tokens.squeeze(0)  # Remove the batch dimension, now shape [k]
-
+                    draft_chunk = all_token_ids[(first_occurrence + gamma): (first_occurrence + gamma + to_add)]
+                    draft_tokens = torch.tensor(draft_chunk, device=self.device).unsqueeze(0)
+                    
+                    
+                    
+                    last_token_id = all_token_ids[-1]
+                    last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
+                    draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
+                    
+                    
+                    
                     vocab_size = self.vocab_size
-
                     draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
                     draft_probs[torch.arange(draft_tokens.size(1)), 0, draft_tokens] = 1
+                    gamma = draft_tokens.size(1)-1
 
-                    # Verify the shape
-                    #print("YYY", draft_probs.shape)  # Should be [k, 1, vocab_size]
+            #if use_specdec and not copied:
+            #    last_token_id = all_token_ids[-1]
+            #    input_for_draft = torch.tensor([[last_token_id]], device=self.device)
+            #    with torch.no_grad():
+            #        draft_outputs = self.draft_model(input_for_draft, use_cache=True, return_dict=True, max_length=input_for_draft.size(1) + k)
+            #    draft_logits = draft_outputs.logits[:, -k:, :]
+            #    draft_probs = draft_logits.softmax(-1)
+            #    draft_tokens = torch.multinomial(draft_probs.view(-1, draft_probs.size(-1)), 1).view(1, -1)
 
-                    gamma = draft_tokens.size(1)
+            if draft_tokens is not None:
 
-            if use_specdec and not copied:
+                #I think we don't actually need this whopss
+                #trimmed_past_key_values = []
+                #for layer_past in target_past_key_values:
+                #    key, value = layer_past
+                #    new_length_key = key.shape[2]-1
+                #    new_length_value = value.shape[2]-1
+                #    trimmed_key = key[:, :, :new_length_key, :].clone()
+                #    trimmed_value = value[:, :, :new_length_value, :].clone()
+                #    trimmed_past_key_values.append((trimmed_key, trimmed_value))
+                #target_past_key_values = tuple(trimmed_past_key_values)
 
-                #print("HERE??")
-
-                gamma = k
+                #last_token_id = all_token_ids[-1]
+                #last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
+                #draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
 
                 with torch.no_grad():
-                    draft_outputs = self.draft_model.generate(
-                        self.clip_context(input_ids, self.max_context_draft),
-                        attention_mask=attention_mask,
-                        max_new_tokens=gamma,
-                        #do_sample=True,
-                        temperature=temperature,
-                        top_k=top_k,
-                        top_p=top_p,
-                        return_dict_in_generate=True,
-                        output_scores=True,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                    )
-                draft_tokens = draft_outputs.sequences[:, input_ids.size(1):] #torch.Size([1, 5])
-                draft_probs = torch.stack(draft_outputs.scores).softmax(-1) #torch.Size([5, 1, 50257]) for GPT2
-
-                #print("TTT", draft_tokens.shape)
-                #print("UUU", draft_probs.shape)
-
-            accepted_tokens = []
-
-            if draft_tokens is None:
-                with torch.no_grad():
-                    target_outputs = self.target_model.generate(
-                        self.clip_context(input_ids, self.max_context_draft),
-                        attention_mask=attention_mask,
-                        max_new_tokens=10,
-                        #do_sample=True,
-                        do_sample=False,
-                        return_dict_in_generate=True,
-                        output_scores=True,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                    )
-                    #target_outputs = self.target_model(
-                    #    self.clip_context(input_ids, self.max_context_target),
-                    #    attention_mask=attention_mask,
-                    #    return_dict=True,
-                    #)
-                print("AYY", input_ids.shape)
-                print(target_outputs.shape)
-                target_logits = target_outputs[:, -1, :]
-                next_token = torch.multinomial(target_logits.softmax(dim=-1), num_samples=1)
-                #draft_tokens = next_token
-                #input_ids = torch.cat([input_ids, draft_tokens], dim=1)
-                #attention_mask = torch.cat([attention_mask, torch.ones_like(draft_tokens)], dim=1)
-                #return self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
-
-            else:
-
-                #print("!!!", torch.cat([input_ids, draft_tokens], dim=1).shape)
-
-                # Target model single forward pass
-                with torch.no_grad():
-                    target_outputs = self.target_model(
-                        self.clip_context(torch.cat([input_ids, draft_tokens], dim=1), self.max_context_target),
-                        attention_mask=torch.cat([attention_mask, torch.ones_like(draft_tokens)], dim=1),
-                        return_dict=True,
-                    )
-                
-                #target_logits = target_outputs.logits[:, input_ids.size(1)-1:-1]
-                # THIS IS CHANGED FOR EXACT SAME OUTPUTS
-                target_logits = target_outputs.logits[:, input_ids.size(1)-1:]
+                    target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                #print("BEFFF", target_past_key_values[0][0].shape, len(draft_tokens[0]))
+                target_past_key_values = target_outputs.past_key_values
+                target_logits = target_outputs.logits
+                #print("OUTPUT SHAPE", target_logits.shape)
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
 
-                # print("AAA", target_probs)
-                
-                # Speculative sampling
-                for i in range(gamma):
-                    draft_token = draft_tokens[:, i]
+                #print("PROBS SHAPE", target_probs.shape)
 
-                    #print("TTT", draft_token)
-                    #print("WWW", torch.argmax(target_probs[:, i]))
+                accepted_tokens = []
+                for i in range(gamma+1):
 
-                    draft_prob = draft_probs[i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
-                    target_prob = target_probs[:, i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
-                    
-                    accept_prob = torch.min(torch.ones_like(target_prob), target_prob / draft_prob)
-                    #print("T", target_prob)
-                    #print("D", draft_prob)
-                    if torch.rand(1, device=self.device) < accept_prob:
-                        accepted_tokens.append(draft_token)
-                    else:
+                    if i==gamma:
+                        next_token = torch.multinomial(target_probs[:, i], 1)[0]
+                        accepted_tokens.append(next_token)
                         break
-                    # if draft_prob <= target_prob:
-                    #     # Accept deterministically if draft prob <= target_prob
-                    #     accepted_tokens.append(draft_token)
-                    # else:
-                    #     # Probabilistic rejection if draft prob > target_prob
-                    #     rejection_prob = 1 - target_prob / draft_prob
-                    #     if torch.rand(1, device=self.device) < rejection_prob:
-                    #         break
-                
+
+                    draft_token = draft_tokens[:, i+1]
+                    draft_prob = draft_probs[i+1].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
+                    #if i == 0:
+                    #    target_prob = init_target_probs[:, 0].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
+                    #else:
+                    target_prob = target_probs[:, i].gather(-1, draft_token.unsqueeze(-1)).squeeze(-1)
+                    accept_prob = torch.min(torch.ones_like(target_prob), target_prob / draft_prob)
+                    if accept_prob < 1:
+                        #if i == 0:
+                        #    adjusted_probs = torch.clamp(init_target_probs[:, 0] - draft_probs[i], min=0)
+                        #else:
+                        next_token = torch.multinomial(target_probs[:, i], 1)[0]
+                        accepted_tokens.append(next_token)
+                        break
+                    else:
+                        accepted_tokens.append(draft_token)
+
+                #print("OOO", draft_tokens)
+                #print("!!!", self.tokenizer.decode(draft_tokens[0], skip_special_tokens=True))
+                #print("UUU", self.tokenizer.decode(torch.cat(accepted_tokens), skip_special_tokens=True))
+
                 num_accepted = len(accepted_tokens)
+                #print(num_accepted)
+                self.total_accepted += num_accepted-1
+                #if num_accepted == gamma:
+                #    next_token = torch.multinomial(target_probs[:, -1], 1)[0]
+                #    accepted_tokens.append(next_token)
 
-                i += num_accepted
+                new_tokens = torch.cat(accepted_tokens)
+                final_length = len(all_token_ids) + num_accepted
+                #print("&&&&&&&&&&&&&&&&&&&", final_length)
+                trimmed_past_key_values = []
+                for layer_past in target_past_key_values:
+                    key, value = layer_past
+                    #print("A", key.shape)
+                    trimmed_key = key[:, :, :final_length, :].clone()
+                    trimmed_value = value[:, :, :final_length, :].clone()
+                    trimmed_past_key_values.append((trimmed_key, trimmed_value))
+                    #print("B", trimmed_key.shape)
+                target_past_key_values = tuple(trimmed_past_key_values)
 
-                print(num_accepted)
-            
-                if num_accepted < gamma:
-                    adjusted_probs = torch.clamp(target_probs[:, num_accepted] - draft_probs[num_accepted], min=0)
-                    adjusted_probs /= adjusted_probs.sum(dim=-1, keepdim=True)
-                    next_token = torch.multinomial(adjusted_probs, num_samples=1)
-                else:
-                    next_token = torch.multinomial(target_probs[:, -1], num_samples=1)
-            
-            accepted_tokens.append(next_token)
-            new_tokens = torch.cat([token.view(1, 1) for token in accepted_tokens], dim=1)
-            
-            input_ids = torch.cat([input_ids, new_tokens], dim=1)
-            attention_mask = torch.cat([attention_mask, torch.ones_like(new_tokens)], dim=1)
+            else:
+                last_token_id = all_token_ids[-1]
+                input_for_target = torch.tensor([[last_token_id]], device=self.device)
+                with torch.no_grad():
+                    target_outputs = self.target_model(input_for_target, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                target_past_key_values = target_outputs.past_key_values
+                target_logits = target_outputs.logits
+                target_probs = self.sample(target_logits, temperature, top_k, top_p)
+                next_token = torch.multinomial(target_probs[:, 0], 1)
+                new_tokens = next_token
 
             new_token_ids = new_tokens.squeeze(0).tolist()
-            all_token_ids = input_ids.squeeze(0).tolist()
-            start_idx = max(0, len(all_token_ids) - len(new_token_ids) - gamma + 1)
+            if not isinstance(new_token_ids, list):
+                new_token_ids = [new_token_ids]
+            all_token_ids.extend(new_token_ids)
+            total_generated += len(new_token_ids)
 
-            for j in range(start_idx, len(all_token_ids) - gamma + 1):
-                token_group = tuple(all_token_ids[j:j + gamma])
-                token_hash = hash(token_group)
-                start_pos = j
+            if gamma > 0:
+                for j in range(len(all_token_ids) - gamma + 1):
+                    token_group = tuple(all_token_ids[j:j + gamma])
+                    token_hash = hash(token_group)
+                    start_pos = j
+                    if token_hash not in self.copy_dict:
+                        self.copy_dict[token_hash] = []
+                    if start_pos not in self.copy_dict[token_hash]:
+                        self.copy_dict[token_hash].append(start_pos)
 
-                #print(token_group)
-
-                if token_hash not in self.copy_dict:
-                    self.copy_dict[token_hash] = []
-                self.copy_dict[token_hash].append(start_pos)
-            
             gamma = stored_gamma
 
-            #print("CURRENT", self.tokenizer.decode(new_tokens[0], skip_special_tokens=True))
+            if total_generated >= max_new_tokens:
+                break
 
-            #if input_ids.size(1) - len(self.tokenizer.encode(prompt)) >= max_new_tokens:
-            #    break
-        
-        return self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        return self.tokenizer.decode(all_token_ids, skip_special_tokens=True), self.total_accepted
 
     def target_generate_greedy(self, prompt, max_new_tokens=50):
         """
-        Generate text using standard greedy decoding with the target model.
+        Generate text one token at a time using greedy decoding with KV caching.
 
         Args:
             prompt (str): The input prompt to start generation from.
@@ -353,22 +314,37 @@ class SpeculativeDecoder:
         Returns:
             str: The generated text.
         """
+        import torch
+        
+        # Tokenize the input prompt
         model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        return self.tokenizer.decode(greedy_output[0])
+
+        # Initial forward pass to get logits and past_key_values
+        # `use_cache=True` ensures that past_key_values are returned
+        outputs = self.target_model(**model_inputs, use_cache=True)
+        generated_ids = model_inputs["input_ids"]
+        
+        # Iteratively generate tokens
+        for _ in range(max_new_tokens):
+            # Greedy decoding: select the token with the highest probability
+            next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+            
+            # Append the next token to our generated sequence
+            generated_ids = torch.cat((generated_ids, next_token), dim=1)
+            
+            # Use the newly generated token along with past_key_values for next step
+            outputs = self.target_model(
+                input_ids=next_token, 
+                past_key_values=outputs.past_key_values, 
+                use_cache=True
+            )
+
+        # Decode the entire generated sequence
+        return self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
 
     def draft_generate_greedy(self, prompt, max_new_tokens=50):
-        """
-        Generate text using standard greedy decoding with the draft model.
-
-        Args:
-            prompt (str): The input prompt to start generation from.
-            max_new_tokens (int): The maximum number of new tokens to generate. Defaults to 50
-
-        Returns:
-            str: The generated text.
-        """
+        # Greedy decoding with the draft model
         model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         greedy_output = self.draft_model.generate(**model_inputs, max_new_tokens=max_new_tokens)
         return self.tokenizer.decode(greedy_output[0])
-
