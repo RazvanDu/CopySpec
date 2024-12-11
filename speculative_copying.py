@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
-cache_directory = "/home/mlyang721/.cache/huggingface/hub"
+cache_directory = "/mnt/razvandu/speculative_decoding/models_cache"
 
 class SpeculativeDecoder:
     """
@@ -343,7 +343,6 @@ class SpeculativeDecoder:
                         self.copy_dict[token_hash] = []
                     if start_pos not in self.copy_dict[token_hash]:
                         self.copy_dict[token_hash].append(start_pos)
-
 
             if total_generated >= max_new_tokens:
                 break
