@@ -16,7 +16,7 @@ hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
 # Check for GPU availability
 if not torch.cuda.is_available():
     raise EnvironmentError("No GPU found. Ensure a GPU is available and properly configured.")
-device = torch.device("cuda")  # Use the first GPU
+device = torch.device("cuda:1")  # Use the first GPU
 print(f"Using device: {device}")
 
 # Enable GPU memory optimization
@@ -41,7 +41,7 @@ print("Model loaded successfully!")
 
 # Function to generate code completion
 def generate_completion(prompt):
-    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+    inputs = tokenizer(prompt, return_tensors="pt").to("cuda:1")
     outputs = model.generate(inputs.input_ids, max_new_tokens=300)
     completion = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return completion
@@ -56,6 +56,7 @@ for task in tqdm(dataset["test"], desc="Processing Tasks"):
     prompt = task["prompt"]
     start = time.time()
     completion = generate_completion(prompt)
+    print(completion)
     end = time.time()
     n_time.append(end-start)
     completions.append({

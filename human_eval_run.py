@@ -6,14 +6,15 @@ from datasets import load_dataset
 from speculative_copying import SpeculativeDecoder
 import time
 from tqdm import tqdm
+torch.backends.cuda.matmul.allow_tf32 = True  # Allow TF32 on Tensor Cores for faster matrix multiplications
 
 model_path = "/home/mlyang721/.cache/huggingface/hub"
 top_p = 1
 top_k = 0
-max_new_token = 200
+max_new_token = 300
 
 # Set the CUDA device
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Load the HumanEval dataset
 dataset = load_dataset("openai_humaneval")
@@ -25,7 +26,7 @@ hf_token = os.getenv("HF_TOKEN")
 # Load the LLaMA model and tokenizer with authentication
 model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Replace with your desired LLaMA model
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=hf_token)
-model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=hf_token, device_map="auto").to(device)
+model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=hf_token, device_map="auto")
 
 # Function to generate code completion
 def generate_completion(prompt):
@@ -52,6 +53,7 @@ for task in tqdm(dataset["test"], desc="Processing tasks", unit="task"):
         gamma=5,
         max_new_tokens=max_new_token
     )
+    print(completion[0])
     end = time.time()
     
     # Append results to respective lists
