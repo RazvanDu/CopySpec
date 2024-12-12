@@ -139,7 +139,7 @@ class SpeculativeDecoder:
         with torch.no_grad():
             target_outputs = self.target_model(prompt_ids, use_cache=True, return_dict=True)
         target_past_key_values = target_outputs.past_key_values
-        #init_target_probs = self.sample(target_outputs.logits[:, -1:], temperature, top_k, top_p)
+        init_target_probs = self.sample(target_outputs.logits[:, -1:], temperature, top_k, top_p)
 
         self.total_accepted = 0
 
@@ -153,9 +153,7 @@ class SpeculativeDecoder:
 
             draft_tokens = None
             draft_probs = None
-            new_tokens = None
             copied = False
-
             if len(all_token_ids) >= gamma:
                 last_gamma_tokens = tuple(all_token_ids[-gamma:])
                 token_hash = hash(last_gamma_tokens)
@@ -163,7 +161,7 @@ class SpeculativeDecoder:
                     copied = True
                     first_occurrence = self.copy_dict[token_hash][0]
                     left_tokens = max_new_tokens - total_generated
-                    to_add = min(100, left_tokens)
+                    to_add = min(100, gamma + left_tokens)
 
                     #print("ATTEMPTING TO COPY!")
 
@@ -215,16 +213,7 @@ class SpeculativeDecoder:
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
                 #print("BEFFF", target_past_key_values[0][0].shape, len(draft_tokens[0]))
-                
-                
-                
-                #TODO: PUT BACK
-                #target_past_key_values = target_outputs.past_key_values
-
-
-
-
-
+                target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 #print("OUTPUT SHAPE", target_logits.shape)
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
@@ -270,45 +259,15 @@ class SpeculativeDecoder:
                 new_tokens = torch.cat(accepted_tokens)
                 final_length = len(all_token_ids) + num_accepted
                 #print("&&&&&&&&&&&&&&&&&&&", final_length)
-                regenerate_KV = True
-
-
-                #with torch.no_grad():
-                #    target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                #target_past_key_values = target_outputs.past_key_values
-                #print("BEFFF", target_past_key_values[0][0].shape, len(draft_tokens[0]))
-                
-                
-                
-                #TODO: PUT BACK
-
-                # trimmed_past_key_values = []
-                # for layer_past in target_past_key_values:
-                #     key, value = layer_past
-                #     #print("A", key.shape)
-                #     trimmed_key = key[:, :, :final_length, :].clone()
-                #     trimmed_value = value[:, :, :final_length, :].clone()
-                #     trimmed_past_key_values.append((trimmed_key, trimmed_value))
-                #     #print("B", trimmed_key.shape)
-                # target_past_key_values = tuple(trimmed_past_key_values)
-
-
-                # Prepare the context tokens with the accepted tokens
-                accepted_tokens_tensor = torch.tensor(accepted_tokens, device=self.device).unsqueeze(0)
-                accepted_tokens_tensor = torch.cat([last_token_tensor, accepted_tokens_tensor], dim=1)
-
-                with torch.no_grad():
-                    # Run the model using the last token in all_token_ids and the accepted tokens
-                    target_outputs = self.target_model(
-                        accepted_tokens_tensor,
-                        use_cache=True,
-                        return_dict=True,
-                        past_key_values=target_past_key_values,
-                    )
-
-                # Update the past_key_values with the regenerated ones
-                target_past_key_values = target_outputs.past_key_values
-
+                trimmed_past_key_values = []
+                for layer_past in target_past_key_values:
+                    key, value = layer_past
+                    #print("A", key.shape)
+                    trimmed_key = key[:, :, :final_length, :].clone()
+                    trimmed_value = value[:, :, :final_length, :].clone()
+                    trimmed_past_key_values.append((trimmed_key, trimmed_value))
+                    #print("B", trimmed_key.shape)
+                target_past_key_values = tuple(trimmed_past_key_values)
 
             else:
                 last_token_id = all_token_ids[-1]
@@ -316,23 +275,16 @@ class SpeculativeDecoder:
                 with torch.no_grad():
                     target_outputs = self.target_model(input_for_target, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
                 target_past_key_values = target_outputs.past_key_values
-            target_logits = target_outputs.logits
-            target_probs = self.sample(target_logits, temperature, top_k, top_p)
-            next_token = torch.multinomial(target_probs[:, -1], 1)
-            if new_tokens is None:
+                target_logits = target_outputs.logits
+                target_probs = self.sample(target_logits, temperature, top_k, top_p)
+                next_token = torch.multinomial(target_probs[:, 0], 1)
                 new_tokens = next_token
-            else:
-                #print(next_token.shape)
-                #print(new_tokens.unsqueeze(0).shape)
-                new_tokens = torch.cat([new_tokens.unsqueeze(0), next_token], dim=1)
 
             new_token_ids = new_tokens.squeeze(0).tolist()
             if not isinstance(new_token_ids, list):
                 new_token_ids = [new_token_ids]
             all_token_ids.extend(new_token_ids)
             total_generated += len(new_token_ids)
-
-            gamma = stored_gamma
 
             if gamma > 0:
                 for j in range(len(all_token_ids) - gamma + 1):
@@ -343,6 +295,8 @@ class SpeculativeDecoder:
                         self.copy_dict[token_hash] = []
                     if start_pos not in self.copy_dict[token_hash]:
                         self.copy_dict[token_hash].append(start_pos)
+
+            gamma = stored_gamma
 
             if total_generated >= max_new_tokens:
                 break
