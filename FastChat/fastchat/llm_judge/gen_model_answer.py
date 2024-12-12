@@ -134,6 +134,8 @@ def get_model_answers(
             turns = []
             for j in range(len(question["turns"])):
 
+                print("@@@", j, conv)
+
                 qs = question["turns"][j]
                 conv.append_message(conv.roles[0], qs)
                 conv.append_message(conv.roles[1], None)
@@ -145,92 +147,81 @@ def get_model_answers(
                 else:
                     do_sample = True
 
-                #print("")
-                #print("INPUT:", prompt)
-
                 # some models may error out when generating long outputs
-                #try:
-                if use_copy:
-                    output, tokens_accepted = decoder.generate(
-                        prompt,
-                        temperature=0.0,
-                        top_k=top_k,
-                        top_p=top_p,
-                        gamma=5,
-                        max_new_tokens=max_new_token
-                    )
-                    #print("")
-                    print(tokens_accepted, "tokens were accepted!")
-                    #print("")
-                else:
-                    output = decoder.target_generate_greedy(
-                        prompt,
-                        max_new_tokens=max_new_token,
-                    )
-                    #output_ids = model.generate(
-                    #    torch.as_tensor(input_ids).cuda(),
-                    #    do_sample=do_sample,
-                    #    temperature=temperature,
-                    #    max_new_tokens=max_new_token,
-                    #)
-                print("OUTPUT:", output)
-                #print("!!!ASDASD")
-                #print("!!!!!!!!!", output)
-                
-                
-                #if decoder.target_config.is_encoder_decoder:
-                #    output_ids = output_ids[0]
-                #else:
-                #    output_ids = output_ids[0][len(input_ids[0]) :]
-
-                # be consistent with the template's stop_token_ids
-                #if conv.stop_token_ids:
-                #    stop_token_ids_index = [
-                #        i
-                #        for i, id in enumerate(output_ids)
-                #        if id in conv.stop_token_ids
-                #    ]
-                #    if len(stop_token_ids_index) > 0:
-                #        output_ids = output_ids[: stop_token_ids_index[0]]
-
-                #output = tokenizer.decode(
-                #    output_ids,
-                #    spaces_between_special_tokens=False,
-                #)
-
-
-                if conv.stop_str and isinstance(conv.stop_str, list):
-                    stop_str_indices = sorted(
-                        [
-                            output.find(stop_str)
-                            for stop_str in conv.stop_str
-                            if output.find(stop_str) > 0
-                        ]
-                    )
-                    if len(stop_str_indices) > 0:
-                        output = output[: stop_str_indices[0]]
-                elif conv.stop_str and output.find(conv.stop_str) > 0:
-                    output = output[: output.find(conv.stop_str)]
-
-                for special_token in tokenizer.special_tokens_map.values():
-                    if isinstance(special_token, list):
-                        for special_tok in special_token:
-                            output = output.replace(special_tok, "")
+                try:
+                    if use_copy:
+                        output = decoder.generate(
+                            prompt,
+                            temperature=0.0,
+                            top_k=top_k,
+                            top_p=top_p,
+                            gamma=5,
+                            max_new_tokens=max_new_token
+                        )
                     else:
-                        output = output.replace(special_token, "")
-                output = output.strip()
+                        output = decoder.target_generate_greedy(
+                            prompt,
+                            max_new_tokens=max_new_token,
+                        )
+                        #output_ids = model.generate(
+                        #    torch.as_tensor(input_ids).cuda(),
+                        #    do_sample=do_sample,
+                        #    temperature=temperature,
+                        #    max_new_tokens=max_new_token,
+                        #)
+                    print("A", output)
+                    
+                    
+                    #if decoder.target_config.is_encoder_decoder:
+                    #    output_ids = output_ids[0]
+                    #else:
+                    #    output_ids = output_ids[0][len(input_ids[0]) :]
 
-                if conv.name == "xgen" and output.startswith("Assistant:"):
-                    output = output.replace("Assistant:", "", 1).strip()
-                #except RuntimeError as e:
-                #    print("THE ERROR:", e)
-                #    print("ERROR question ID: ", question["question_id"])
-                #    output = "ERROR"
+                    # be consistent with the template's stop_token_ids
+                    #if conv.stop_token_ids:
+                    #    stop_token_ids_index = [
+                    #        i
+                    #        for i, id in enumerate(output_ids)
+                    #        if id in conv.stop_token_ids
+                    #    ]
+                    #    if len(stop_token_ids_index) > 0:
+                    #        output_ids = output_ids[: stop_token_ids_index[0]]
+
+                    #output = tokenizer.decode(
+                    #    output_ids,
+                    #    spaces_between_special_tokens=False,
+                    #)
+
+
+                    if conv.stop_str and isinstance(conv.stop_str, list):
+                        stop_str_indices = sorted(
+                            [
+                                output.find(stop_str)
+                                for stop_str in conv.stop_str
+                                if output.find(stop_str) > 0
+                            ]
+                        )
+                        if len(stop_str_indices) > 0:
+                            output = output[: stop_str_indices[0]]
+                    elif conv.stop_str and output.find(conv.stop_str) > 0:
+                        output = output[: output.find(conv.stop_str)]
+
+                    for special_token in tokenizer.special_tokens_map.values():
+                        if isinstance(special_token, list):
+                            for special_tok in special_token:
+                                output = output.replace(special_tok, "")
+                        else:
+                            output = output.replace(special_token, "")
+                    output = output.strip()
+
+                    if conv.name == "xgen" and output.startswith("Assistant:"):
+                        output = output.replace("Assistant:", "", 1).strip()
+                except RuntimeError as e:
+                    print("ERROR question ID: ", question["question_id"])
+                    output = "ERROR"
 
                 conv.update_last_message(output)
                 turns.append(output)
-
-                #print("@@@", j, output)
 
             choices.append({"index": i, "turns": turns})
 
