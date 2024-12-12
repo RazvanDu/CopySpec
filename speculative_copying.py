@@ -139,6 +139,17 @@ class SpeculativeDecoder:
         with torch.no_grad():
             target_outputs = self.target_model(prompt_ids, use_cache=True, return_dict=True)
         target_past_key_values = target_outputs.past_key_values
+
+        target_logits = target_outputs.logits
+        target_probs = self.sample(target_logits, temperature, top_k, top_p)
+        next_token = torch.multinomial(target_probs[:, -1], 1)
+        new_token_ids = next_token.squeeze(0).tolist()
+        if not isinstance(new_token_ids, list):
+            new_token_ids = [new_token_ids]
+        all_token_ids.extend(new_token_ids)
+        total_generated += len(new_token_ids)
+
+        
         #init_target_probs = self.sample(target_outputs.logits[:, -1:], temperature, top_k, top_p)
 
         self.total_accepted = 0
@@ -331,6 +342,9 @@ class SpeculativeDecoder:
                 new_token_ids = [new_token_ids]
             all_token_ids.extend(new_token_ids)
             total_generated += len(new_token_ids)
+
+            
+            #print("GENERATED BEFORE:", self.tokenizer.decode(all_token_ids, skip_special_tokens=True))
 
             gamma = stored_gamma
 
