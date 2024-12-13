@@ -1,7 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
-from dotenv import load_dotenv
 from datasets import load_dataset
 from speculative_copying import SpeculativeDecoder
 import time
@@ -17,10 +16,6 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Load the HumanEval dataset
 dataset = load_dataset("openai_humaneval")
-
-# Load environment variables from .env file
-load_dotenv()
-hf_token = os.getenv("HF_TOKEN")
 
 # Load the LLaMA model and tokenizer with authentication
 model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Replace with your desired LLaMA model
@@ -52,6 +47,7 @@ for task in tqdm(dataset["test"], desc="Processing tasks", unit="task"):
         max_new_tokens=max_new_token
     )
     print(completion[0])
+    #print("L", len(completion[0]))
     end = time.time()
     
     # Append results to respective lists

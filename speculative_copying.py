@@ -30,8 +30,8 @@ class SpeculativeDecoder:
         self.device = device
         self.target_config = config = AutoConfig.from_pretrained(target_model_name, cache_dir=cache_directory)
         self.draft_config = config = AutoConfig.from_pretrained(draft_model_name, cache_dir=cache_directory)
-        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name, cache_dir=cache_directory).to(self.device)
-        self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name, cache_dir=cache_directory).to(self.device)
+        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name, cache_dir=cache_directory, device_map='auto')
+        self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name, cache_dir=cache_directory, device_map='auto')
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_name, cache_dir=cache_directory)
         self.copy_dict = dict()
         
@@ -127,11 +127,13 @@ class SpeculativeDecoder:
         return input_ids
 
     def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
+
         use_specdec = False
         stored_gamma = gamma
         prompt_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
         self.preprocess_prompt(prompt_ids, gamma)
         all_token_ids = prompt_ids.squeeze(0).tolist()
+        prompt_length = len(all_token_ids)
         total_generated = 0
         target_past_key_values = None
         draft_past_key_values = None
@@ -149,18 +151,23 @@ class SpeculativeDecoder:
         all_token_ids.extend(new_token_ids)
         total_generated += len(new_token_ids)
 
-        
-        #init_target_probs = self.sample(target_outputs.logits[:, -1:], temperature, top_k, top_p)
-
         self.total_accepted = 0
 
+        stop_token = self.tokenizer.eos_token_id
+
+        #print("TT", self.tokenizer.eos_token, self.tokenizer.eos_token_id)
+
         while True:
+
+            #stop_token = tokenizer.eos_token_id
+
+            if stop_token in new_token_ids:
+                break
+
             left_to_do = max_new_tokens - total_generated
-            gamma = min(gamma, left_to_do - 1)
+            gamma = min(gamma, left_to_do)
             if gamma <= 0:
                 break
-            #print("AFTTT", target_past_key_values[0][0].shape)
-            #print("IIIII", len(all_token_ids))
 
             draft_tokens = None
             draft_probs = None
@@ -171,26 +178,17 @@ class SpeculativeDecoder:
                 last_gamma_tokens = tuple(all_token_ids[-gamma:])
                 token_hash = hash(last_gamma_tokens)
                 if token_hash in self.copy_dict and self.copy_dict[token_hash][0] + gamma < len(all_token_ids):
+
                     copied = True
                     first_occurrence = self.copy_dict[token_hash][0]
                     left_tokens = max_new_tokens - total_generated
                     to_add = min(100, left_tokens)
 
-                    #print("ATTEMPTING TO COPY!")
-
-                    #print("CURRENT TEXT", self.tokenizer.decode(all_token_ids, skip_special_tokens=True))
-                    #print("LOOKING FOR", self.tokenizer.decode(all_token_ids[-gamma:], skip_special_tokens=True))
-
                     draft_chunk = all_token_ids[(first_occurrence + gamma): (first_occurrence + gamma + to_add)]
                     draft_tokens = torch.tensor(draft_chunk, device=self.device).unsqueeze(0)
-                    
-                    
-                    
                     last_token_id = all_token_ids[-1]
                     last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
                     draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
-                    
-                    
                     
                     vocab_size = self.vocab_size
                     draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
@@ -358,8 +356,19 @@ class SpeculativeDecoder:
                     if start_pos not in self.copy_dict[token_hash]:
                         self.copy_dict[token_hash].append(start_pos)
 
-            if total_generated >= max_new_tokens:
-                break
+            #if total_generated >= max_new_tokens:
+            #    break
+
+        #print(len(all_token_ids), total_generated)
+
+        if stop_token in all_token_ids:
+            stop_index = (all_token_ids == stop_token).nonzero(as_tuple=True)[0][0]
+            all_token_ids = all_token_ids[:stop_index]
+
+        if len(all_token_ids) > max_new_tokens+prompt_length:
+            all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
+
+        print(len(all_token_ids)-prompt_length)
 
         return self.tokenizer.decode(all_token_ids, skip_special_tokens=True), self.total_accepted
 
