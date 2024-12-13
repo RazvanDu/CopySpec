@@ -20,12 +20,6 @@ dataset = load_dataset("openai_humaneval")
 # Load the LLaMA model and tokenizer with authentication
 model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Replace with your desired LLaMA model
 
-# Function to generate code completion
-def generate_completion(prompt):
-    inputs = tokenizer.encode(prompt, return_tensors="pt").to(device)
-    outputs = model.generate(inputs, max_length=512)
-    completion = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return completion
 
 decoder = SpeculativeDecoder(model_name, "openai-community/gpt2", device=device)
 
