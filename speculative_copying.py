@@ -164,6 +164,9 @@ class SpeculativeDecoder:
             if stop_token in new_token_ids:
                 break
 
+            #print(new_token_ids)
+            #print(self.tokenizer.decode(torch.tensor([torch.tensor(idd) for idd in new_token_ids]), skip_special_tokens=True))
+
             left_to_do = max_new_tokens - total_generated
             gamma = min(gamma, left_to_do)
             if gamma <= 0:
@@ -362,13 +365,13 @@ class SpeculativeDecoder:
         #print(len(all_token_ids), total_generated)
 
         if stop_token in all_token_ids:
-            stop_index = (all_token_ids == stop_token).nonzero(as_tuple=True)[0][0]
-            all_token_ids = all_token_ids[:stop_index]
+            stop_index = all_token_ids.index(stop_token)  
+            all_token_ids = all_token_ids[:stop_index] 
 
         if len(all_token_ids) > max_new_tokens+prompt_length:
             all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
 
-        print(len(all_token_ids)-prompt_length)
+        #print(len(all_token_ids)-prompt_length)
 
         return self.tokenizer.decode(all_token_ids, skip_special_tokens=True), self.total_accepted
 
