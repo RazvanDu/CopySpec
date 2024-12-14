@@ -14,7 +14,7 @@ dataset = load_dataset("openai_humaneval")
 # Check for GPU availability
 if not torch.cuda.is_available():
     raise EnvironmentError("No GPU found. Ensure a GPU is available and properly configured.")
-device = torch.device("cuda:0")  # Use the first GPU
+device = torch.device("cuda")  # Use the first GPU
 print(f"Using device: {device}")
 
 # Enable GPU memory optimization
@@ -39,7 +39,7 @@ print("Model loaded successfully!")
 
 # Function to generate code completion
 def generate_completion(prompt):
-    inputs = tokenizer(prompt, return_tensors="pt").to("cuda:0")
+    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
     outputs = model.generate(inputs.input_ids, max_new_tokens=300)
     completion = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return completion
