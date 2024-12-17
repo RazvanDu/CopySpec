@@ -126,7 +126,7 @@ class SpeculativeDecoder:
         #    input_ids = input_ids[:, -max_dim:]  # Retain the last max_dim tokens
         return input_ids
 
-    def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
+    def generate_raw(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
 
         use_specdec = False
         stored_gamma = gamma
@@ -373,9 +373,19 @@ class SpeculativeDecoder:
 
         #print(len(all_token_ids)-prompt_length)
 
-        return self.tokenizer.decode(all_token_ids, skip_special_tokens=True), self.total_accepted
+        all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
+        all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)
 
-    def target_generate_greedy(self, prompt, max_new_tokens=50):
+        return all_token_ids_tensor, self.total_accepted
+
+    def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
+
+        all_token_ids, _ = self.generate_raw(prompt, temperature, top_k, top_p, k, gamma, max_new_tokens)
+
+        return self.tokenizer.decode(all_token_ids[0], skip_special_tokens=True), self.total_accepted
+
+
+    def target_generate_greedy_temp(self, prompt, max_new_tokens=50):
         """
         Generate text one token at a time using greedy decoding with KV caching.
 
@@ -414,6 +424,14 @@ class SpeculativeDecoder:
         # Decode the entire generated sequence
         return self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
 
+    def target_generate_greedy_raw(self, prompt, max_new_tokens=50):
+        # Greedy decoding with the draft model
+        model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens)
+        return greedy_output
+
+    def target_generate_greedy(self, prompt, max_new_tokens=50):
+        return self.tokenizer.decode(self.target_generate_greedy_raw(prompt, max_new_tokens)[0])
 
     def draft_generate_greedy(self, prompt, max_new_tokens=50):
         # Greedy decoding with the draft model

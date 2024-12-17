@@ -93,7 +93,7 @@ def get_model_answers(
 ):
     top_p = 1
     top_k = 0
-    use_copy = True
+    use_copy = False
 
     print("AAA")
 
@@ -135,6 +135,9 @@ def get_model_answers(
             for j in range(len(question["turns"])):
 
                 qs = question["turns"][j]
+
+                print("TTT", conv)
+
                 conv.append_message(conv.roles[0], qs)
                 conv.append_message(conv.roles[1], None)
                 prompt = conv.get_prompt()
@@ -152,7 +155,7 @@ def get_model_answers(
                 # some models may error out when generating long outputs
                 #try:
                 if use_copy:
-                    output, tokens_accepted = decoder.generate(
+                    output_ids, tokens_accepted = decoder.generate_raw(
                         prompt,
                         temperature=0.0,
                         top_k=top_k,
@@ -164,7 +167,7 @@ def get_model_answers(
                     print(tokens_accepted, "tokens were accepted!")
                     #print("")
                 else:
-                    output = decoder.target_generate_greedy(
+                    output_ids = decoder.target_generate_greedy_raw(
                         prompt,
                         max_new_tokens=max_new_token,
                     )
@@ -174,30 +177,30 @@ def get_model_answers(
                     #    temperature=temperature,
                     #    max_new_tokens=max_new_token,
                     #)
-                print("OUTPUT:", output)
+                print("OUTPUT:", tokenizer.decode(output_ids[0], skip_special_tokens=True))
                 #print("!!!ASDASD")
                 #print("!!!!!!!!!", output)
                 
                 
-                #if decoder.target_config.is_encoder_decoder:
-                #    output_ids = output_ids[0]
-                #else:
-                #    output_ids = output_ids[0][len(input_ids[0]) :]
+                if decoder.target_config.is_encoder_decoder:
+                    output_ids = output_ids[0]
+                else:
+                    output_ids = output_ids[0][len(input_ids[0]) :]
 
                 # be consistent with the template's stop_token_ids
-                #if conv.stop_token_ids:
-                #    stop_token_ids_index = [
-                #        i
-                #        for i, id in enumerate(output_ids)
-                #        if id in conv.stop_token_ids
-                #    ]
-                #    if len(stop_token_ids_index) > 0:
-                #        output_ids = output_ids[: stop_token_ids_index[0]]
+                if conv.stop_token_ids:
+                    stop_token_ids_index = [
+                        i
+                        for i, id in enumerate(output_ids)
+                        if id in conv.stop_token_ids
+                    ]
+                    if len(stop_token_ids_index) > 0:
+                        output_ids = output_ids[: stop_token_ids_index[0]]
 
-                #output = tokenizer.decode(
-                #    output_ids,
-                #    spaces_between_special_tokens=False,
-                #)
+                output = tokenizer.decode(
+                    output_ids,
+                    spaces_between_special_tokens=False,
+                )
 
 
                 if conv.stop_str and isinstance(conv.stop_str, list):
