@@ -93,7 +93,7 @@ def get_model_answers(
 ):
     top_p = 1
     top_k = 0
-    use_copy = False
+    use_copy = True
 
     print("AAA")
 
