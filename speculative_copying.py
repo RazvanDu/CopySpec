@@ -366,7 +366,7 @@ class SpeculativeDecoder:
 
     def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
 
-        all_token_ids, _ = self.generate_raw(prompt, temperature, top_k, top_p, k, gamma, max_new_tokens)
+        all_token_ids, _ = self.generate_raw_regenerateKV(prompt, temperature, top_k, top_p, k, gamma, max_new_tokens)
 
         return self.tokenizer.decode(all_token_ids[0], skip_special_tokens=True), self.total_accepted
 
