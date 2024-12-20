@@ -506,25 +506,43 @@ class SpeculativeDecoder:
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
 
                 accepted_tokens = []
-                for i in range(draft_size + 1):
-                    if i == draft_size:
-                        chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
-                        accepted_tokens.append(chosen_token)
-                        break
+                #for i in range(draft_size + 1):
+                #    if i == draft_size:
+                #        chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
+                #        accepted_tokens.append(chosen_token)
+                #        break
+
+                #    draft_token = draft_tokens[:, i+1]
+                #    draft_token_id = draft_token.item()
+                #    draft_prob = 1.0
+                #    target_prob = target_probs[:, i, draft_token_id]
+
+                #    #print(target_prob)
+
+                #    if target_prob == 1:
+                #        accepted_tokens.append(draft_token)
+                #    else:
+                #        chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
+                #        accepted_tokens.append(chosen_token)
+                #        break
+
+                broken = False
+                for i in range(draft_size-1):
 
                     draft_token = draft_tokens[:, i+1]
-                    draft_token_id = draft_token.item()
-                    draft_prob = 1.0
-                    target_prob = target_probs[:, i, draft_token_id]
+                    target_prob = target_probs[:, i, draft_token]
 
-                    #print(target_prob)
-
-                    if target_prob < 1:
+                    if target_prob == 1:
+                        accepted_tokens.append(draft_token)
+                    else:
                         chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
                         accepted_tokens.append(chosen_token)
+                        broken = True
                         break
-                    else:
-                        accepted_tokens.append(draft_token)
+
+                if not broken:
+                    chosen_token = torch.multinomial(target_probs[:, -1], 1)[0]
+                    accepted_tokens.append(chosen_token)
 
                 num_accepted = len(accepted_tokens)
                 self.total_accepted += num_accepted-1
@@ -543,6 +561,9 @@ class SpeculativeDecoder:
                         past_key_values=target_past_key_values,
                     )
                 target_past_key_values = target_outputs.past_key_values
+
+                self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
+                self.total_query += 1
 
             else:
                 #num_accepted = 1
@@ -579,12 +600,19 @@ class SpeculativeDecoder:
                     if start_pos not in self.copy_dict[token_hash]:
                         self.copy_dict[token_hash].append(start_pos)
 
+        self.total_generated += len(all_token_ids) - prompt_length
+        self.summed_copied += self.total_accepted
+
         if stop_token in all_token_ids:
             stop_index = all_token_ids.index(stop_token)  
             all_token_ids = all_token_ids[:stop_index] 
 
         if len(all_token_ids) > max_new_tokens+prompt_length:
             all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
+
+        print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
+        print("We attempted to copy", self.total_query, "times")
+        print("Out of those we accepted ", (self.summed_query/self.total_query*100), "tokens for each 100 tokens")
 
         all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
         all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)

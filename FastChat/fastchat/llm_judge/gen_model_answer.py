@@ -155,7 +155,7 @@ def get_model_answers(
                 # some models may error out when generating long outputs
                 #try:
                 if use_copy:
-                    output_ids, tokens_accepted = decoder.generate_raw(
+                    output_ids, tokens_accepted = decoder.generate_raw_regenerateKV(
                         prompt,
                         temperature=0.0,
                         top_k=top_k,
