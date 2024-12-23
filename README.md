@@ -7,8 +7,6 @@ python dataset/evalplus/evalplus/evaluate.py --model "deepseek-ai/deepseek-coder
 python dataset/evalplus/evalplus/evaluate.py   --model "meta-llama/Llama-3.1-70B-Instruct"   --dataset humaneval   --backend spec   --force-base-prompt   --greedy   --device_map auto    --trust_remote_code true --attn_implementation flash_attention_2
 ```
 
-草泥马了这代码整理的跟狗屎一样
-export PYTHONPATH=$PYTHONPATH:/home/mlyang721/SpeculativeCopying
 
 # 🚀 Speculative Decoding
 
