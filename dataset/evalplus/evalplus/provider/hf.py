@@ -9,6 +9,8 @@ from evalplus.provider.utility import (
     make_raw_chat_prompt,
 )
 
+cache_directory = "/mnt/razvandu/speculative_decoding/models_cache"
+
 
 class HuggingFaceDecoder(DecoderBase):
     def __init__(
@@ -41,7 +43,9 @@ class HuggingFaceDecoder(DecoderBase):
             self.eos += ["\n```\n"]
 
         print(f"{self.eos = }")
-        self.model = AutoModelForCausalLM.from_pretrained(name, **kwargs)
+        print("HERE1")
+        self.model = AutoModelForCausalLM.from_pretrained(name, cache_dir=cache_directory, **kwargs)
+        print("HERE2")
         self.model = self.model.to(self.device)
 
     def is_direct_completion(self) -> bool:
@@ -76,9 +80,9 @@ class HuggingFaceDecoder(DecoderBase):
             input_tokens,
             max_new_tokens=300,
             do_sample=do_sample,
-            num_return_sequences=min(self.batch_size, num_samples),
-            pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
-            stop_strings=self.eos,
+            #num_return_sequences=min(self.batch_size, num_samples),
+            #pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+            #stop_strings=self.eos,
             tokenizer=self.tokenizer,
             **kwargs,
         )

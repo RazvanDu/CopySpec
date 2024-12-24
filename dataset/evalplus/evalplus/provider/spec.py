@@ -56,12 +56,14 @@ class SpeculativeDecoderProvider(DecoderBase):
         print("[DEBUG] SpeculativeDecoder initialized successfully.")
 
         # Tokenizer and EOS settings
-        self.tokenizer = self.decoder.tokenizer
-        self.eos = ["<|endoftext|>", "<|endofmask|>", "</s>"]
-        if not self.is_direct_completion():
+        self.tokenizer = self.decoder.tokenizer        
+        
+        if self.is_direct_completion():  # no chat template
             self.eos += extra_eos_for_direct_completion(dataset)
+        else:  # with chat template
+            self.eos += ["\n```\n"]
 
-        print(f"[DEBUG] EOS tokens: {self.eos}")
+        print(f"{self.eos = }")
 
     def is_direct_completion(self) -> bool:
         """

@@ -204,7 +204,7 @@ class SpeculativeDecoder:
                     draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
                     draft_probs[torch.arange(draft_tokens.size(1)), 0, draft_tokens] = 1
                     #gamma = draft_tokens.size(1)-1
-                    draft_size = draft_tokens.size(1)
+                    draft_size = draft_tokens.size(1)-1
 
             #if use_specdec and not copied:
             #    last_token_id = all_token_ids[-1]
@@ -236,7 +236,7 @@ class SpeculativeDecoder:
                 t=time.time()
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                target_past_key_values = target_outputs.past_key_values
+                #target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
                 #print("AAA1", time.time()-t)
@@ -245,7 +245,7 @@ class SpeculativeDecoder:
 
                 accepted_tokens = []
                 broken = False
-                for i in range(draft_size-1):
+                for i in range(draft_size):
 
                     draft_token = draft_tokens[:, i+1]
                     target_prob = target_probs[:, i, draft_token]
@@ -291,10 +291,16 @@ class SpeculativeDecoder:
                 #    #print("B", trimmed_key.shape)
                 #target_past_key_values = tuple(trimmed_past_key_values)
 
-                target_past_key_values = tuple(
-                    (key[:, :, :final_length, :], value[:, :, :final_length, :])
-                    for key, value in target_past_key_values
-                )
+                #target_past_key_values = tuple(
+                #    (key[:, :, :final_length, :], value[:, :, :final_length, :])
+                #    for key, value in target_past_key_values
+                #)
+
+                with torch.no_grad():
+                    target_outputs = self.target_model(torch.cat([last_token_tensor, new_tokens.unsqueeze(dim=0)], dim=1), use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                target_past_key_values = target_outputs.past_key_values
+
+
                 #print("OUT1", time.time()-t)
 
             else:
@@ -527,7 +533,7 @@ class SpeculativeDecoder:
                 #        break
 
                 broken = False
-                for i in range(draft_size-1):
+                for i in range(draft_size):
 
                     draft_token = draft_tokens[:, i+1]
                     target_prob = target_probs[:, i, draft_token]
