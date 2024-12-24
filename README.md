@@ -1,3 +1,13 @@
+## valPlus
+```
+python dataset/evalplus/evalplus/evaluate.py --model "deepseek-ai/deepseek-coder-33b-instruct" --dataset humaneval --backend hf  --force-base-prompt --greedy --device_map auto --trust_remote_code true --attn_implementation flash_attention_2
+```
+
+```
+python dataset/evalplus/evalplus/evaluate.py   --model "meta-llama/Llama-3.1-70B-Instruct"   --dataset humaneval   --backend spec   --force-base-prompt   --greedy   --device_map auto    --trust_remote_code true --attn_implementation flash_attention_2
+```
+
+
 # 🚀 Speculative Decoding
 
 This repository contains an open-source implementation of speculative decoding for accelerating inference from large language models, as described in the paper ["Fast Inference from Transformers via Speculative Decoding"](https://arxiv.org/abs/2211.17192) by Leviathan et al.
