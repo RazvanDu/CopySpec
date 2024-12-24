@@ -236,7 +236,7 @@ class SpeculativeDecoder:
                 t=time.time()
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                #target_past_key_values = target_outputs.past_key_values
+                target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
                 #print("AAA1", time.time()-t)
@@ -296,9 +296,9 @@ class SpeculativeDecoder:
                 #    for key, value in target_past_key_values
                 #)
 
-                with torch.no_grad():
-                    target_outputs = self.target_model(torch.cat([last_token_tensor, new_tokens.unsqueeze(dim=0)], dim=1), use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                target_past_key_values = target_outputs.past_key_values
+                #with torch.no_grad():
+                #    target_outputs = self.target_model(torch.cat([last_token_tensor, new_tokens.unsqueeze(dim=0)], dim=1), use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                #target_past_key_values = target_outputs.past_key_values
 
 
                 #print("OUT1", time.time()-t)
