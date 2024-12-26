@@ -135,6 +135,7 @@ class SpeculativeDecoder:
 
     def generate_raw(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
 
+        self.copy_dict = dict()
         use_specdec = False
         stored_gamma = gamma
         prompt_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
@@ -162,17 +163,7 @@ class SpeculativeDecoder:
 
         stop_token = self.tokenizer.eos_token_id
 
-        #print("TT", self.tokenizer.eos_token, self.tokenizer.eos_token_id)
-
         while True:
-
-            #stop_token = tokenizer.eos_token_id
-
-            if stop_token in new_token_ids:
-                break
-
-            #print(new_token_ids)
-            #print(self.tokenizer.decode(torch.tensor([torch.tensor(idd) for idd in new_token_ids]), skip_special_tokens=True))
 
             left_to_do = max_new_tokens - total_generated
             gamma = min(gamma, left_to_do)
@@ -217,31 +208,11 @@ class SpeculativeDecoder:
 
             if draft_tokens is not None:
 
-                #I think we don't actually need this whopss
-                #trimmed_past_key_values = []
-                #for layer_past in target_past_key_values:
-                #    key, value = layer_past
-                #    new_length_key = key.shape[2]-1
-                #    new_length_value = value.shape[2]-1
-                #    trimmed_key = key[:, :, :new_length_key, :].clone()
-                #    trimmed_value = value[:, :, :new_length_value, :].clone()
-                #    trimmed_past_key_values.append((trimmed_key, trimmed_value))
-                #target_past_key_values = tuple(trimmed_past_key_values)
-
-                #last_token_id = all_token_ids[-1]
-                #last_token_tensor = torch.tensor([[last_token_id]], dtype=draft_tokens.dtype, device=draft_tokens.device)
-                #draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
-
-
-                t=time.time()
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
                 target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
-                #print("AAA1", time.time()-t)
-
-
 
                 accepted_tokens = []
                 broken = False
@@ -263,75 +234,58 @@ class SpeculativeDecoder:
                     accepted_tokens.append(chosen_token)
 
                 new_tokens = torch.cat(accepted_tokens)
-
-                #print("OOO", draft_tokens)
-                #print("!!!", self.tokenizer.decode(draft_tokens[0], skip_special_tokens=True))
-                #print("UUU", self.tokenizer.decode(torch.cat(accepted_tokens), skip_special_tokens=True))
-
                 self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
                 self.total_query += 1
 
                 num_accepted = len(accepted_tokens)
-                #print(num_accepted)
                 self.total_accepted += num_accepted-1
-                #if num_accepted == gamma:
-                #    next_token = torch.multinomial(target_probs[:, -1], 1)[0]
-                #    accepted_tokens.append(next_token)
 
-                #new_tokens = torch.cat(accepted_tokens)
-                final_length = len(all_token_ids) + num_accepted
-
-                #trimmed_past_key_values = []
-                #for layer_past in target_past_key_values:
-                #    key, value = layer_past
-                #    #print("A", key.shape)
-                #    trimmed_key = key[:, :, :final_length, :].clone()
-                #    trimmed_value = value[:, :, :final_length, :].clone()
-                #    trimmed_past_key_values.append((trimmed_key, trimmed_value))
-                #    #print("B", trimmed_key.shape)
-                #target_past_key_values = tuple(trimmed_past_key_values)
-
-                #target_past_key_values = tuple(
-                #    (key[:, :, :final_length, :], value[:, :, :final_length, :])
-                #    for key, value in target_past_key_values
-                #)
-
-                #with torch.no_grad():
-                #    target_outputs = self.target_model(torch.cat([last_token_tensor, new_tokens.unsqueeze(dim=0)], dim=1), use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                #target_past_key_values = target_outputs.past_key_values
-
-
-                #print("OUT1", time.time()-t)
+                final_length = len(all_token_ids) + num_accepted - 1
+                target_past_key_values = tuple(
+                    (key[:, :, :final_length, :], value[:, :, :final_length, :])
+                    for key, value in target_past_key_values
+                )
 
             else:
-
-                t=time.time()
                 
                 last_token_id = all_token_ids[-1]
                 input_for_target = torch.tensor([[last_token_id]], device=self.device)
-                t2=time.time()
+
                 with torch.no_grad():
                     target_outputs = self.target_model(input_for_target, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                #print("AAA2", time.time()-t2)
                 target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
+
                 next_token = torch.multinomial(target_probs[:, 0], 1)
                 new_tokens = next_token
 
-                #print("OUT2", time.time()-t)
-
             new_token_ids = new_tokens.squeeze(0).tolist()
+
+            to_break = False
+
             if not isinstance(new_token_ids, list):
                 new_token_ids = [new_token_ids]
-            all_token_ids.extend(new_token_ids)
-            total_generated += len(new_token_ids)
 
-            
-            #print("GENERATED BEFORE:", self.tokenizer.decode(all_token_ids, skip_special_tokens=True))
+            if stop_token in new_token_ids:
+                stop_index = new_token_ids.index(stop_token)  
+                new_token_ids = new_token_ids[:stop_index]
+                to_break = True
+             
+            all_token_ids.extend(new_token_ids)
+
+            total_generated += len(new_token_ids)
+            added_size = len(new_token_ids)
+            gamma = stored_gamma
+
+            if to_break:
+                break
+
+            #print("GENERATED:", self.tokenizer.decode(new_token_ids, skip_special_tokens=True))
 
             if gamma > 0:
-                for j in range(len(all_token_ids) - gamma + 1):
+                for j in range(len(all_token_ids) - added_size - gamma, len(all_token_ids) - gamma):
+                    #print(j, j+gamma, len(all_token_ids))
                     token_group = tuple(all_token_ids[j:j + gamma])
                     token_hash = hash(token_group)
                     start_pos = j
@@ -342,16 +296,7 @@ class SpeculativeDecoder:
 
             gamma = stored_gamma
 
-            #if total_generated >= max_new_tokens:
-            #    break
-
-        #print(len(all_token_ids), total_generated)
-
-        if stop_token in all_token_ids:
-            stop_index = all_token_ids.index(stop_token)  
-            all_token_ids = all_token_ids[:stop_index] 
-
-        print("!!!", (len(all_token_ids)-prompt_length))
+        #print("!!!", (len(all_token_ids)-prompt_length))
 
         if len(all_token_ids) > max_new_tokens+prompt_length:
             all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
@@ -362,8 +307,6 @@ class SpeculativeDecoder:
         print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
         print("We attempted to copy", self.total_query, "times")
         print("Out of those we accepted ", (self.summed_query/self.total_query), "tokens for each 100 tokens")
-
-        #print(len(all_token_ids)-prompt_length)
 
         all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
         all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)
@@ -439,6 +382,7 @@ class SpeculativeDecoder:
 
     def generate_raw_regenerateKV(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
 
+        self.copy_dict = dict()
         use_specdec = False
         stored_gamma = gamma
         prompt_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
@@ -467,9 +411,6 @@ class SpeculativeDecoder:
         stop_token = self.tokenizer.eos_token_id
 
         while True:
-
-            if stop_token in new_token_ids:
-                break
 
             left_to_do = max_new_tokens - total_generated
             gamma = min(gamma, left_to_do)
@@ -503,35 +444,16 @@ class SpeculativeDecoder:
                     #gamma = draft_tokens.size(1)-1
                     draft_size = draft_tokens.size(1)-1
 
+            #copied = False
+
             if draft_tokens is not None:
 
                 with torch.no_grad():
                     target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
-                
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
 
                 accepted_tokens = []
-                #for i in range(draft_size + 1):
-                #    if i == draft_size:
-                #        chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
-                #        accepted_tokens.append(chosen_token)
-                #        break
-
-                #    draft_token = draft_tokens[:, i+1]
-                #    draft_token_id = draft_token.item()
-                #    draft_prob = 1.0
-                #    target_prob = target_probs[:, i, draft_token_id]
-
-                #    #print(target_prob)
-
-                #    if target_prob == 1:
-                #        accepted_tokens.append(draft_token)
-                #    else:
-                #        chosen_token = torch.multinomial(target_probs[:, i], 1)[0]
-                #        accepted_tokens.append(chosen_token)
-                #        break
-
                 broken = False
                 for i in range(draft_size):
 
@@ -550,11 +472,12 @@ class SpeculativeDecoder:
                     chosen_token = torch.multinomial(target_probs[:, -1], 1)[0]
                     accepted_tokens.append(chosen_token)
 
+                new_tokens = torch.cat(accepted_tokens)
+                self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
+                self.total_query += 1
+
                 num_accepted = len(accepted_tokens)
                 self.total_accepted += num_accepted-1
-
-                new_tokens = torch.cat(accepted_tokens)
-                final_length = len(all_token_ids) + num_accepted
                 
                 accepted_tokens_tensor = torch.tensor(accepted_tokens, device=self.device).unsqueeze(0)
                 accepted_tokens_tensor = torch.cat([last_token_tensor, accepted_tokens_tensor], dim=1)
@@ -567,9 +490,7 @@ class SpeculativeDecoder:
                         past_key_values=target_past_key_values,
                     )
                 target_past_key_values = target_outputs.past_key_values
-
-                self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
-                self.total_query += 1
+                #copied = True
 
             else:
                 #num_accepted = 1
@@ -586,14 +507,24 @@ class SpeculativeDecoder:
             else:
                 new_tokens = torch.cat([new_tokens.unsqueeze(0), next_token], dim=1)
 
+            to_break = False
+
             new_token_ids = new_tokens.squeeze(0).tolist()
+             
             if not isinstance(new_token_ids, list):
                 new_token_ids = [new_token_ids]
+
+            if stop_token in new_token_ids:
+                stop_index = new_token_ids.index(stop_token)  
+                new_token_ids = new_token_ids[:stop_index]
+                to_break = True
+            
             all_token_ids.extend(new_token_ids)
             total_generated += len(new_token_ids)
-            added_size = new_tokens.size(1)
+            added_size = len(new_token_ids)
 
-            gamma = stored_gamma
+            if to_break:
+                break
 
             if gamma > 0:
                 for j in range(len(all_token_ids) - added_size - gamma, len(all_token_ids) - gamma):
@@ -606,12 +537,13 @@ class SpeculativeDecoder:
                     if start_pos not in self.copy_dict[token_hash]:
                         self.copy_dict[token_hash].append(start_pos)
 
+            gamma = stored_gamma
+
+            #if copied:
+            #   print(self.tokenizer.decode(all_token_ids))
+
         self.total_generated += len(all_token_ids) - prompt_length
         self.summed_copied += self.total_accepted
-
-        if stop_token in all_token_ids:
-            stop_index = all_token_ids.index(stop_token)  
-            all_token_ids = all_token_ids[:stop_index] 
 
         if len(all_token_ids) > max_new_tokens+prompt_length:
             all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
@@ -619,6 +551,8 @@ class SpeculativeDecoder:
         print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
         print("We attempted to copy", self.total_query, "times")
         print("Out of those we accepted ", (self.summed_query/self.total_query*100), "tokens for each 100 tokens")
+
+        #print("FINAL ACCEPTED", self.tokenizer.decode(all_token_ids))
 
         all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
         all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)
