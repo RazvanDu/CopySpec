@@ -291,7 +291,7 @@ def run_on_full_dataset(
 if __name__ == "__main__":
     run_on_full_dataset(
         model_name="meta-llama/Llama-3.1-8B-Instruct",
-        output_dir="gsm8k_results",
+        output_dir="GSM/gsm8k_results_cot",
         chunk_size=1000,
         max_print_per_split=2,
         test_only=True  # Change to False to run both train and test splits
