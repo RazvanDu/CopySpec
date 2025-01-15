@@ -5,8 +5,8 @@ import time
 import math
 import torch
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
-from tqdm import tqdm  # Used for displaying progress bars
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from tqdm import tqdm
 from sympy import sympify, simplify
 from speculative_copying import SpeculativeDecoder
 
@@ -14,7 +14,7 @@ from speculative_copying import SpeculativeDecoder
 model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Replace with your desired LLaMA model
 top_p = 1
 top_k = 0
-max_new_token = 300
+max_new_token = 256
 
 # Set the CUDA device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -26,7 +26,7 @@ decoder = SpeculativeDecoder(model_name, "openai-community/gpt2", device=device)
 # =======================
 def extract_boxed_answer(text):
     """
-    Extracts the content of the last \boxed{...} from the model's generated output.
+    Extracts the content of the last \\boxed{...} from the model's generated output.
     - Supports multiline matching.
     - Filters out the placeholder 'answer'.
     """
@@ -57,8 +57,7 @@ def evaluate_prediction(pred_answer, gold_answer):
 
     try:
         # Attempt to parse the predicted and gold answers as floating-point numbers
-        # or simplifiable mathematical expressions
-        pred_expr = simplify(sympify(pred_answer))  
+        pred_expr = simplify(sympify(pred_answer))
         gold_expr = simplify(sympify(gold_answer))
 
         pred_value = float(pred_expr)
@@ -76,10 +75,9 @@ def evaluate_prediction(pred_answer, gold_answer):
 # =======================
 def multi_round_cot(input_question, decoder, max_new_tokens=256):
     """
-    Implements a three-round reasoning process using SpeculativeDecoder:
-    - Round 1: Initial response using COT prompts for step-by-step reasoning.
-    - Round 2: Self-review to analyze reasoning and identify improvements.
-    - Round 3: Refine the answer with improved reasoning.
+    Implements a three-round reasoning process using SpeculativeDecoder.
+    Tracks time and tokens generated for each round.
+    Returns detailed info including tokens/time for each round.
     """
     total_new_tokens = 0
 
@@ -97,10 +95,16 @@ def multi_round_cot(input_question, decoder, max_new_tokens=256):
         top_p=1,
         gamma=5,
         max_new_tokens=max_new_tokens
-    )
+    )[0]
     time_r1 = time.time() - start_time_r1
 
-    cot_round_1 = outputs_1[0]
+    generated_text_1 = outputs_1
+    tokens_generated_1 = len(decoder.tokenizer.encode(generated_text_1, add_special_tokens=False))
+    tokens_prompt_1 = len(decoder.tokenizer.encode(prompt_cot_1, add_special_tokens=False))
+    tokens_r1 = tokens_generated_1 - tokens_prompt_1
+    total_new_tokens += tokens_r1
+
+    cot_round_1 = generated_text_1.strip()
     answer_round_1 = extract_boxed_answer(cot_round_1)
 
     # ---------- Round 2 ----------
@@ -118,15 +122,21 @@ def multi_round_cot(input_question, decoder, max_new_tokens=256):
         top_p=1,
         gamma=5,
         max_new_tokens=max_new_tokens
-    )
+    )[0]
     time_r2 = time.time() - start_time_r2
 
-    cot_round_2 = outputs_2[0]
+    generated_text_2 = outputs_2
+    tokens_generated_2 = len(decoder.tokenizer.encode(generated_text_2, add_special_tokens=False))
+    tokens_prompt_2 = len(decoder.tokenizer.encode(prompt_cot_2, add_special_tokens=False))
+    tokens_r2 = tokens_generated_2 - tokens_prompt_2
+    total_new_tokens += tokens_r2
+
+    cot_round_2 = generated_text_2.strip()
 
     # ---------- Round 3 ----------
     prompt_cot_3 = (
         f"Question: {input_question}\n\n"
-        f"Based on your analysis in Round 2:\n{cot_round_2}\n\n"
+        f"Based on your initial answer \n{cot_round_1} and your analysis in Round 2:\n{cot_round_2}\n\n"
         "Let's refine your reasoning step by step and provide the final improved answer. "
         "Reiterate your reasoning and present your final answer in the form of \\boxed{answer}.\n"
     )
@@ -138,25 +148,36 @@ def multi_round_cot(input_question, decoder, max_new_tokens=256):
         top_p=1,
         gamma=5,
         max_new_tokens=max_new_tokens
-    )
+    )[0]
     time_r3 = time.time() - start_time_r3
 
-    cot_round_3 = outputs_3[0]
+    generated_text_3 = outputs_3
+    tokens_generated_3 = len(decoder.tokenizer.encode(generated_text_3, add_special_tokens=False))
+    tokens_prompt_3 = len(decoder.tokenizer.encode(prompt_cot_3, add_special_tokens=False))
+    tokens_r3 = tokens_generated_3 - tokens_prompt_3
+    total_new_tokens += tokens_r3
+
+    cot_round_3 = generated_text_3.strip()
     answer_round_3 = extract_boxed_answer(cot_round_3)
 
     total_time = time_r1 + time_r2 + time_r3
 
     return {
-        "round_1": cot_round_1.strip(),
-        "answer_round_1": answer_round_1,  # Extracted answer from Round 1
-        "round_2": cot_round_2.strip(),
-        "round_3": cot_round_3.strip(),
-        "final_answer": answer_round_3,    # Final answer extracted from Round 3
+        "round_1": cot_round_1,
+        "answer_round_1": answer_round_1,
+        "round_2": cot_round_2,
+        "round_3": cot_round_3,
+        "final_answer": answer_round_3,
         "total_time_s": total_time,
-        "total_tokens": total_new_tokens
+        "total_tokens": total_new_tokens,
+        # Below are additional fields for tracking time and tokens for each round
+        "time_r1": time_r1,
+        "time_r2": time_r2,
+        "time_r3": time_r3,
+        "tokens_r1": tokens_r1,
+        "tokens_r2": tokens_r2,
+        "tokens_r3": tokens_r3,
     }
-
-# Remaining translation continues in the next message due to length limit.
 
 # =======================
 # Main function for dataset processing
@@ -177,28 +198,45 @@ def run_on_full_dataset(
     os.makedirs(output_dir, exist_ok=True)
 
     print("Loading GSM8K dataset...")
-    dataset = load_dataset("gsm8k", "main")  # Contains train/test splits
+    dataset = load_dataset("gsm8k", "main")
     print("Dataset loaded.")
 
-    # Process only test split if specified; otherwise process train + test
     split_names = ["test"] if test_only else ["train", "test"]
+
+    # Global stats for all splits
+    total_accumulated_tokens = 0.0
+    total_accumulated_time = 0.0
+
+    # Global statistics for each round TPS
+    total_accumulated_tokens_r1 = 0.0
+    total_accumulated_time_r1 = 0.0
+    total_accumulated_tokens_r2 = 0.0
+    total_accumulated_time_r2 = 0.0
+    total_accumulated_tokens_r3 = 0.0
+    total_accumulated_time_r3 = 0.0
 
     for split_name in tqdm(split_names, desc="Splits"):
         split_data = dataset[split_name]
         print(f"Processing split: {split_name} ({len(split_data)} samples)")
 
-        # Buffer for chunked storage
         results_buffer = []
         file_index = 0
 
-        # Accumulated stats for accuracy and TPS
+        # Current split stats
         accumulated_correct_round1 = 0
         accumulated_correct_round3 = 0
         accumulated_samples = 0
         accumulated_tokens = 0.0
         accumulated_time = 0.0
 
-        # Loop through samples in the split
+        # Statistics for each round TPS in the split
+        accumulated_tokens_r1 = 0.0
+        accumulated_time_r1 = 0.0
+        accumulated_tokens_r2 = 0.0
+        accumulated_time_r2 = 0.0
+        accumulated_tokens_r3 = 0.0
+        accumulated_time_r3 = 0.0
+
         for idx, sample in enumerate(tqdm(split_data, desc=f"Processing {split_name}", leave=False)):
             question = sample["question"]
             full_gold_answer = sample["answer"]
@@ -208,40 +246,45 @@ def run_on_full_dataset(
                 print(f"Warning: No valid gold answer in sample {idx}. Skipping.")
                 continue
 
-            # ---------- Perform multi-round inference ----------
+            # Perform multi-round inference
             result = multi_round_cot(question, decoder)
 
-            # ---------- Optional debugging output ----------
-            if idx < max_print_per_split:
-                print(f"\n--- Sample {idx} ---")
-                print("Question:", question)
-                print("Gold Answer:", full_gold_answer)
-                print("Extracted Gold Answer:", gold_answer)
-                print("\n--- Model Outputs ---")
-                print("[Round 1 Output]")
-                print(result["round_1"])  # Full output from Round 1
-                print("[Extracted Answer (Round 1)]")
-                print(result["answer_round_1"])
-                print("\n[Round 2 Output]")
-                print(result["round_2"])  # Full output from Round 2
-                print("\n[Round 3 Output]")
-                print(result["round_3"])  # Full output from Round 3
-                print("[Extracted Answer (Round 3)]")
-                print(result["final_answer"])
-                print("=" * 70)
-
-            # ---------- Evaluate correctness for Round 1 and Round 3 ----------
+            # Evaluate correctness for Round 1 and Round 3
             is_correct_r1 = evaluate_prediction(result["answer_round_1"], gold_answer)
             is_correct_r3 = evaluate_prediction(result["final_answer"], gold_answer)
 
-            # ---------- Accumulate stats ----------
+            # Accumulate stats for the split
             accumulated_correct_round1 += int(is_correct_r1)
             accumulated_correct_round3 += int(is_correct_r3)
             accumulated_samples += 1
             accumulated_tokens += result["total_tokens"]
             accumulated_time += result["total_time_s"]
 
-            # ---------- Add to buffer and save in chunks ----------
+            # Global stats for all splits
+            total_accumulated_tokens += result["total_tokens"]
+            total_accumulated_time += result["total_time_s"]
+
+            # Add each round's tokens/time
+            accumulated_tokens_r1 += result["tokens_r1"]
+            accumulated_time_r1 += result["time_r1"]
+
+            accumulated_tokens_r2 += result["tokens_r2"]
+            accumulated_time_r2 += result["time_r2"]
+
+            accumulated_tokens_r3 += result["tokens_r3"]
+            accumulated_time_r3 += result["time_r3"]
+
+            # Also add to all splits' overall statistics
+            total_accumulated_tokens_r1 += result["tokens_r1"]
+            total_accumulated_time_r1 += result["time_r1"]
+
+            total_accumulated_tokens_r2 += result["tokens_r2"]
+            total_accumulated_time_r2 += result["time_r2"]
+
+            total_accumulated_tokens_r3 += result["tokens_r3"]
+            total_accumulated_time_r3 += result["time_r3"]
+
+            # Save partial results
             results_buffer.append({
                 "question": question,
                 "gold_answer": full_gold_answer,
@@ -258,30 +301,54 @@ def run_on_full_dataset(
                     json.dump(results_buffer, f, indent=2)
                 results_buffer, file_index = [], file_index + 1
 
-        # ---------- Write remaining results to file ----------
+        # Save remaining results for this split
         if results_buffer:
             filename = os.path.join(output_dir, f"{split_name}_part{file_index}.json")
             with open(filename, "w", encoding="utf-8") as f:
                 json.dump(results_buffer, f, indent=2)
 
-        # ========== Calculate and print stats for this split ==========
+        # Calculate and print stats for the current split
         if accumulated_samples > 0:
             acc_r1 = accumulated_correct_round1 / accumulated_samples
             acc_r3 = accumulated_correct_round3 / accumulated_samples
             tps = accumulated_tokens / accumulated_time if accumulated_time > 0 else 0.0
+            
+            # TPS for each round
+            tps_r1 = accumulated_tokens_r1 / accumulated_time_r1 if accumulated_time_r1 > 0 else 0.0
+            tps_r2 = accumulated_tokens_r2 / accumulated_time_r2 if accumulated_time_r2 > 0 else 0.0
+            tps_r3 = accumulated_tokens_r3 / accumulated_time_r3 if accumulated_time_r3 > 0 else 0.0
 
             print(f"\n[{split_name} results]")
             print(f" - Round1 Accuracy: {acc_r1:.4f}  ({accumulated_correct_round1} / {accumulated_samples})")
             print(f" - Round3 Accuracy: {acc_r3:.4f}  ({accumulated_correct_round3} / {accumulated_samples})")
-            print(f" - Tokens per Second (TPS): {tps:.2f} tokens/s\n")
+            print(f" - Total Tokens (split): {accumulated_tokens}")
+            print(f" - Total Time (split): {accumulated_time:.2f} seconds")
+            print(f" - Tokens per Second (TPS, split overall): {tps:.2f} tokens/s")
+
+            # Print TPS for each round
+            print(f"   * Round1 TPS: {tps_r1:.2f} tokens/s")
+            print(f"   * Round2 TPS: {tps_r2:.2f} tokens/s")
+            print(f"   * Round3 TPS: {tps_r3:.2f} tokens/s\n")
+
+
+    print("\n[Overall results across splits]")
+    print(f" - Total Tokens (all splits): {total_accumulated_tokens}")
+    print(f" - Total Time (all splits): {total_accumulated_time:.2f} seconds")
+    print(f" - Overall Tokens per Second (TPS): {overall_tps:.2f} tokens/s")
+
+    # ========================
+    print(" - Round1 Overall TPS: {:.2f} tokens/s".format(overall_tps_r1))
+    print(" - Round2 Overall TPS: {:.2f} tokens/s".format(overall_tps_r2))
+    print(" - Round3 Overall TPS: {:.2f} tokens/s".format(overall_tps_r3))
 
     print("Done!")
 
+
 if __name__ == "__main__":
     run_on_full_dataset(
-        model_name="meta-llama/Llama-3.1-8B-Instruct",
+        decoder=decoder,
         output_dir="GSM/CopySpec_gsm8k_results_COT",
-        chunk_size=1000,
+        # chunk_size=1000,
         max_print_per_split=2,
-        test_only=True  # Change to False to run both train and test splits
+        test_only=True
     )

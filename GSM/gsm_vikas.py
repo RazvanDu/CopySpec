@@ -211,5 +211,5 @@ def run_on_gsm8k_test(model_name, output_dir):
 if __name__ == "__main__":
     run_on_gsm8k_test(
         model_name="meta-llama/Llama-3.1-8B-Instruct",
-        output_dir="GSM/gsm8k_results_Vikas"
+        output_dir="GSM/gsm8k_results_full"
     )
