@@ -1,0 +1,11 @@
+Running HF, run=1
+Output to data/mt_bench/model_answer/DeepSeek-V3-experiments-large.jsonl
+LOADING!!
+AAA
+/mnt/razvandu/speculative_decoding/FastChat/fastchat/__init__.py
+/tmp/.local/lib/python3.11/site-packages/huggingface_hub/file_download.py:651: UserWarning: Not enough free disk space to download the file. The expected file size is: 0.00 MB. The target location /mnt/razvandu/speculative_decoding/models_cache/models--deepseek-ai--DeepSeek-V3/blobs only has 0.00 MB free disk space.
+  warnings.warn(
+The repository for deepseek-ai/DeepSeek-V3 contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/deepseek-ai/DeepSeek-V3.
+You can avoid this prompt in future by passing the argument `trust_remote_code=True`.
+
+Do you wish to run the custom code? [y/N] 

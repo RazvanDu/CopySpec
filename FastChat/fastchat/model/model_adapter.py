@@ -26,7 +26,7 @@ from transformers import (
 )
 
 from fastchat.constants import CPU_ISA
-from fastchat.conversation import Conversation, get_conv_template
+from fastchat.conversation import Conversation, get_conv_template, update_one_shot
 from fastchat.model.compression import load_compress_model
 from fastchat.model.llama_condense_monkey_patch import replace_llama_with_condense
 from fastchat.model.model_chatglm import generate_stream_chatglm
@@ -408,9 +408,10 @@ def load_model(
     return model, tokenizer
 
 
-def get_conversation_template(model_path: str) -> Conversation:
+def get_conversation_template(model_path: str, oneshot: bool) -> Conversation:
     """Get the default conversation template."""
     adapter = get_model_adapter(model_path)
+    update_one_shot(oneshot)
     return adapter.get_default_conv_template(model_path)
 
 

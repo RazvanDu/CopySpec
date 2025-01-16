@@ -202,6 +202,12 @@ if __name__ == "__main__":
         help="A list of models to be evaluated",
     )
     parser.add_argument(
+        "--use-redundant",
+        type=bool,
+        default=False,
+        help="Whether to use the redundant version of the data set",
+    )
+    parser.add_argument(
         "--parallel", type=int, default=1, help="The number of concurrent API calls."
     )
     parser.add_argument(
@@ -210,6 +216,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     question_file = f"data/{args.bench_name}/question.jsonl"
+    if args.use_redundant:  
+        question_file = f"data/{args.bench_name}/question_redundant.jsonl"
+    print("USING QUESTIONS:", question_file)
     answer_dir = f"data/{args.bench_name}/model_answer"
     ref_answer_dir = f"data/{args.bench_name}/reference_answer"
 

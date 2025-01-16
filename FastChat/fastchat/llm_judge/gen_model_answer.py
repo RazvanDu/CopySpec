@@ -8,6 +8,7 @@ import json
 import os
 import random
 import time
+import numpy as np
 
 import shortuuid
 import torch
@@ -28,6 +29,7 @@ from speculative_copying import SpeculativeDecoder
 
 def run_eval(
     model_path,
+    draft_path,
     model_id,
     question_file,
     question_begin,
@@ -37,7 +39,11 @@ def run_eval(
     num_choices,
     num_gpus_per_model,
     num_gpus_total,
+    gamma,
+    delta,
+    oneshot,
     max_gpu_memory,
+    use_copy,
     dtype,
     revision,
 ):
@@ -62,11 +68,16 @@ def run_eval(
         ans_handles.append(
             get_answers_func(
                 model_path,
+                draft_path,
                 model_id,
                 questions[i : i + chunk_size],
                 answer_file,
                 max_new_token,
                 num_choices,
+                use_copy,
+                gamma,
+                delta,
+                oneshot,
                 num_gpus_per_model,
                 max_gpu_memory,
                 dtype=dtype,
@@ -81,11 +92,16 @@ def run_eval(
 @torch.inference_mode()
 def get_model_answers(
     model_path,
+    draft_path,
     model_id,
     questions,
     answer_file,
     max_new_token,
     num_choices,
+    use_copy,
+    gamma,
+    delta,
+    oneshot,
     num_gpus_per_model,
     max_gpu_memory,
     dtype,
@@ -93,17 +109,24 @@ def get_model_answers(
 ):
     top_p = 1
     top_k = 0
-    use_copy = False
 
     print("AAA")
 
     import fastchat
     print(fastchat.__file__)
+
+    total_tokens = 0
     
     #if use_copy:
 
-    decoder = SpeculativeDecoder(model_path, "openai-community/gpt2")
+
+    decoder = SpeculativeDecoder(model_path, draft_model_name=draft_path)
     tokenizer = decoder.tokenizer
+
+    
+
+    # Start the timer
+    start_time = time.time()
 
     #else:
     #    model, tokenizer = load_model(
@@ -121,6 +144,18 @@ def get_model_answers(
 
     #decoder = SpeculativeDecoder(main_model_name, draft_model_name)
 
+    time_taken = dict()
+    generated_dict = dict()
+    torch.manual_seed(123)
+    #torch.backends.cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = False
+    #torch.cuda.manual_seed(123)  # For CUDA operations
+    #torch.cuda.manual_seed_all(123)  # If using multiple GPUs
+    #import random
+    #random.seed(123)  # Python random library
+    #import numpy as np
+    #np.random.seed(123)  # NumPy
+
     for question in tqdm(questions):
         if question["category"] in temperature_config:
             temperature = temperature_config[question["category"]]
@@ -129,14 +164,15 @@ def get_model_answers(
 
         choices = []
         for i in range(num_choices):
-            torch.manual_seed(i)
-            conv = get_conversation_template(model_id)
+            conv = get_conversation_template(model_id, oneshot)
             turns = []
             for j in range(len(question["turns"])):
 
                 qs = question["turns"][j]
 
-                print("TTT", conv)
+                categoryy = question['category'] + "_" + str(j)
+
+                #print("TTT", )
 
                 conv.append_message(conv.roles[0], qs)
                 conv.append_message(conv.roles[1], None)
@@ -154,13 +190,21 @@ def get_model_answers(
 
                 # some models may error out when generating long outputs
                 #try:
-                if use_copy:
-                    output_ids, tokens_accepted = decoder.generate_raw_regenerateKV(
+
+                input_tokens = tokenizer.encode(prompt, return_tensors="pt").to(
+                    "cuda"
+                )
+
+                start_time2 = time.time()
+
+                if use_copy or draft_path != "":
+                    output_ids, tokens_accepted = decoder.generate_raw(
                         prompt,
                         temperature=0.0,
                         top_k=top_k,
                         top_p=top_p,
-                        gamma=5,
+                        gamma=gamma,
+                        delta=delta,
                         max_new_tokens=max_new_token
                     )
                     #print("")
@@ -177,10 +221,30 @@ def get_model_answers(
                     #    temperature=temperature,
                     #    max_new_tokens=max_new_token,
                     #)
+                
+                if categoryy not in time_taken:
+                    time_taken[categoryy] = 0
+                    generated_dict[categoryy] = 0
+                
                 print("OUTPUT:", tokenizer.decode(output_ids[0], skip_special_tokens=True))
+                output_ids_temp = output_ids[:, input_tokens.size(-1) :]
+
+                total_tokens += len(output_ids_temp[0])
+
+                time_taken[categoryy] += time.time() - start_time2
+                generated_dict[categoryy] += len(output_ids_temp[0])
+
+
+                
+                print(total_tokens, "tokens generated thus far!")
+                print("TIME:", time_taken)
+                print("TOKENS:", generated_dict)
+
+                result_dict = {key: generated_dict[key] / time_taken[key] for key in generated_dict}
+                print("RESULT:", result_dict)
+
                 #print("!!!ASDASD")
                 #print("!!!!!!!!!", output)
-                
                 
                 if decoder.target_config.is_encoder_decoder:
                     output_ids = output_ids[0]
@@ -201,7 +265,6 @@ def get_model_answers(
                     output_ids,
                     spaces_between_special_tokens=False,
                 )
-
 
                 if conv.stop_str and isinstance(conv.stop_str, list):
                     stop_str_indices = sorted(
@@ -250,6 +313,15 @@ def get_model_answers(
             }
             fout.write(json.dumps(ans_json) + "\n")
 
+    # Stop the timer
+    end_time = time.time()
+
+    # Calculate the execution time
+    execution_time = end_time - start_time
+
+    # Print the execution time
+    print(f"Execution time is exactly: {execution_time:.2f} seconds")
+
 
 def reorg_answer_file(answer_file):
     """Sort by question id and de-duplication"""
@@ -272,6 +344,12 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="The path to the weights. This can be a local folder or a Hugging Face repo ID.",
+    )
+    parser.add_argument(
+        "--draft-path",
+        type=str,
+        default="",
+        help="The path to the draft weights. This can be a local folder or a Hugging Face repo ID.",
     )
     parser.add_argument(
         "--model-id", type=str, required=True, help="A custom name for the model."
@@ -298,10 +376,40 @@ if __name__ == "__main__":
         help="The maximum number of new generated tokens.",
     )
     parser.add_argument(
+        "--use-copy",
+        type=bool,
+        default=False,
+        help="Whether to use copying or not.",
+    )
+    parser.add_argument(
+        "--use-redundant",
+        type=bool,
+        default=False,
+        help="Whether to use the redundant version.",
+    )
+    parser.add_argument(
         "--num-choices",
         type=int,
         default=1,
         help="How many completion choices to generate.",
+    )
+    parser.add_argument(
+        "--gamma",
+        type=int,
+        default=3,
+        help="The number of tokens to search for.",
+    )
+    parser.add_argument(
+        "--delta",
+        type=int,
+        default=5,
+        help="The number of tokens that the draft model generates when using speculative decoding",
+    )
+    parser.add_argument(
+        "--oneshot",
+        type=bool,
+        default=False,
+        help="Whether or not to use One Shot.",
     )
     parser.add_argument(
         "--num-gpus-per-model",
@@ -338,7 +446,11 @@ if __name__ == "__main__":
 
         ray.init()
 
-    question_file = f"fastchat/llm_judge/data/{args.bench_name}/question.jsonl"
+    if args.use_redundant:
+        question_file = f"fastchat/llm_judge/data/{args.bench_name}/question_redundant.jsonl"
+    else:
+        question_file = f"fastchat/llm_judge/data/{args.bench_name}/question.jsonl"
+    
     if args.answer_file:
         answer_file = args.answer_file
     else:
@@ -348,6 +460,7 @@ if __name__ == "__main__":
 
     run_eval(
         model_path=args.model_path,
+        draft_path=args.draft_path,
         model_id=args.model_id,
         question_file=question_file,
         question_begin=args.question_begin,
@@ -355,6 +468,10 @@ if __name__ == "__main__":
         answer_file=answer_file,
         max_new_token=args.max_new_token,
         num_choices=args.num_choices,
+        use_copy=args.use_copy,
+        gamma=args.gamma,
+        delta=args.delta,
+        oneshot=args.oneshot,
         num_gpus_per_model=args.num_gpus_per_model,
         num_gpus_total=args.num_gpus_total,
         max_gpu_memory=args.max_gpu_memory,

@@ -20,7 +20,7 @@ class SpeculativeDecoder:
         tokenizer (AutoTokenizer): The tokenizer for both models.
     """
 
-    def __init__(self, target_model_name, draft_model_name, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, target_model_name, draft_model_name="", device='cuda' if torch.cuda.is_available() else 'cpu'):
         """
         Initialize the SpeculativeDecoder with target and draft models.
 
@@ -30,10 +30,15 @@ class SpeculativeDecoder:
             device (str): The device to run the models on. Defaults to 'cuda' if available, else 'cpu'.
         """
         self.device = device
-        self.target_config = config = AutoConfig.from_pretrained(target_model_name, cache_dir=cache_directory)
-        self.draft_config = config = AutoConfig.from_pretrained(draft_model_name, cache_dir=cache_directory)
-        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name, cache_dir=cache_directory, device_map='auto')
-        self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name, cache_dir=cache_directory, device_map='auto')
+        self.target_config = config = AutoConfig.from_pretrained(target_model_name, cache_dir=cache_directory, trust_remote_code=True)
+        self.target_model = AutoModelForCausalLM.from_pretrained(target_model_name, cache_dir=cache_directory, device_map='auto', trust_remote_code=True)
+        if draft_model_name != "":
+            self.use_specdec = True
+        else:
+            self.use_specdec = False
+        if self.use_specdec:
+            self.draft_config = config = AutoConfig.from_pretrained(draft_model_name, cache_dir=cache_directory)
+            self.draft_model = AutoModelForCausalLM.from_pretrained(draft_model_name, cache_dir=cache_directory, device_map='auto')
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_name, cache_dir=cache_directory)
         self.copy_dict = dict()
         
@@ -41,13 +46,15 @@ class SpeculativeDecoder:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
         self.target_model.eval()
-        self.draft_model.eval()
+        if self.use_specdec:
+            self.draft_model.eval()
 
         self.vocab_size = self.target_model.config.vocab_size
         #print(f"Vocabulary size: {vocab_size}")
 
         self.max_context_target = self.target_config.max_position_embeddings
-        self.max_context_draft = self.draft_config.max_position_embeddings
+        if self.use_specdec:
+            self.max_context_draft = self.draft_config.max_position_embeddings
 
         print("TEST", self.max_context_target)
 
@@ -57,6 +64,9 @@ class SpeculativeDecoder:
 
         self.summed_query = 0
         self.total_query = 0
+
+        self.accepted_spec = 0
+        self.total_spec = 0
 
         #print("WE CAN AT MOST FIT", self.max_context_size)
         #print(f"Maximum context size: {max_context_size}")
@@ -133,10 +143,11 @@ class SpeculativeDecoder:
         #    input_ids = input_ids[:, -max_dim:]  # Retain the last max_dim tokens
         return input_ids
 
-    def generate_raw(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
+    def generate_raw(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, delta=5, max_new_tokens=100):
+
+        print("RUNNING WITH GAMMA", gamma, self.use_specdec)
 
         self.copy_dict = dict()
-        use_specdec = False
         stored_gamma = gamma
         prompt_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
         self.preprocess_prompt(prompt_ids, gamma)
@@ -147,7 +158,7 @@ class SpeculativeDecoder:
         draft_past_key_values = None
 
         with torch.no_grad():
-            target_outputs = self.target_model(prompt_ids, use_cache=True, return_dict=True)
+            target_outputs = self.target_model(prompt_ids, use_cache=True, return_dict=True, temperature=temperature)
         target_past_key_values = target_outputs.past_key_values
 
         target_logits = target_outputs.logits
@@ -158,10 +169,15 @@ class SpeculativeDecoder:
             new_token_ids = [new_token_ids]
         all_token_ids.extend(new_token_ids)
         total_generated += len(new_token_ids)
+        to_pass_draft = all_token_ids
 
         self.total_accepted = 0
 
         stop_token = self.tokenizer.eos_token_id
+
+        draft_kv_cache = None
+
+        #to_pass_draft = None
 
         while True:
 
@@ -192,24 +208,52 @@ class SpeculativeDecoder:
                     draft_tokens = torch.cat([last_token_tensor, draft_tokens], dim=1)
                     
                     vocab_size = self.vocab_size
-                    draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
-                    draft_probs[torch.arange(draft_tokens.size(1)), 0, draft_tokens] = 1
+                    #draft_probs = torch.zeros((draft_tokens.size(1), 1, vocab_size), device=draft_tokens.device)
+                    #draft_probs[torch.arange(draft_tokens.size(1)), 0, draft_tokens] = 1
                     #gamma = draft_tokens.size(1)-1
                     draft_size = draft_tokens.size(1)-1
 
-            #if use_specdec and not copied:
-            #    last_token_id = all_token_ids[-1]
-            #    input_for_draft = torch.tensor([[last_token_id]], device=self.device)
-            #    with torch.no_grad():
-            #        draft_outputs = self.draft_model(input_for_draft, use_cache=True, return_dict=True, max_length=input_for_draft.size(1) + k)
-            #    draft_logits = draft_outputs.logits[:, -k:, :]
-            #    draft_probs = draft_logits.softmax(-1)
-            #    draft_tokens = torch.multinomial(draft_probs.view(-1, draft_probs.size(-1)), 1).view(1, -1)
-
-            if draft_tokens is not None:
+            if self.use_specdec and not copied:
+                
+                last_token_id = all_token_ids[-1]
+                if not to_pass_draft:
+                    input_for_draft = torch.tensor([[last_token_id]], device=self.device)
+                else:
+                    input_for_draft = torch.tensor([to_pass_draft], device=self.device)
+                
+                #print("!!!INPUT FOR DRAFT:", input_for_draft[0])
 
                 with torch.no_grad():
-                    target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                    #draft_kv_cache = None
+                    draft_tokens = []
+                    for _ in range(delta):
+                        draft_outputs = self.draft_model(
+                            input_for_draft, 
+                            past_key_values=draft_kv_cache, 
+                            use_cache=True, 
+                            return_dict=True,
+                            temperature=temperature,
+                        )
+                        draft_kv_cache = draft_outputs.past_key_values
+                        draft_logits = draft_outputs.logits
+                        draft_probs = self.sample(draft_logits, temperature, top_k, top_p)
+                        #draft_probs = draft_logits.softmax(-1)
+                        next_token = torch.multinomial(draft_probs[:, -1], 1)
+                        draft_tokens.append(next_token.item())
+                        #print("AAA", next_token)
+                        input_for_draft = next_token
+                    draft_tokens = torch.tensor([[last_token_id] + draft_tokens], device=self.device)
+                    draft_size = draft_tokens.size(1) - 1
+                    to_pass_draft = []
+                    self.total_spec += delta
+                    
+            if draft_tokens is not None:
+
+                #print("DRAFT:", self.tokenizer.decode(draft_tokens[0], skip_special_tokens=True))
+                #print("DT", draft_tokens[0])
+
+                with torch.no_grad():
+                    target_outputs = self.target_model(draft_tokens, use_cache=True, return_dict=True, past_key_values=target_past_key_values, temperature=temperature)
                 target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
@@ -233,12 +277,17 @@ class SpeculativeDecoder:
                     chosen_token = torch.multinomial(target_probs[:, -1], 1)[0]
                     accepted_tokens.append(chosen_token)
 
+                #print("ACCEPTED:", self.tokenizer.decode(torch.tensor(accepted_tokens), skip_special_tokens=True))
+                #print("AT", accepted_tokens)
+
                 new_tokens = torch.cat(accepted_tokens)
-                self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
-                self.total_query += 1
 
                 num_accepted = len(accepted_tokens)
-                self.total_accepted += num_accepted-1
+
+                if copied:
+                    self.summed_query += len(accepted_tokens)/draft_tokens.size(1)
+                    self.total_query += 1
+                    self.total_accepted += num_accepted-1
 
                 final_length = len(all_token_ids) + num_accepted - 1
                 target_past_key_values = tuple(
@@ -246,13 +295,38 @@ class SpeculativeDecoder:
                     for key, value in target_past_key_values
                 )
 
+                if not copied:
+                    #print("A", draft_kv_cache[0][0].shape)
+                    #print("B", draft_kv_cache[0][0].shape)
+                    #print("@", len(all_token_ids))
+                    #print("@@", final_length)
+                    if num_accepted == delta+1:
+                        if delta != 0:
+                            to_pass_draft = to_pass_draft + [accepted_tokens[-2], accepted_tokens[-1]]
+                        else:
+                            to_pass_draft = to_pass_draft + [accepted_tokens[-1]]
+                    else:
+                        to_pass_draft = to_pass_draft + [accepted_tokens[-1]]   
+                        draft_kv_cache = tuple(
+                            (key[:, :, :(final_length-1), :], value[:, :, :(final_length-1), :])
+                            for key, value in draft_kv_cache
+                        )
+                    self.accepted_spec += num_accepted-1
+                    #print("!!!", self.accepted_spec/self.total_spec, copied)
+                else:
+                    to_pass_draft = to_pass_draft + accepted_tokens
+                    #if to_pass_draft is None:
+                    #    to_pass_draft = accepted_tokens
+                    #else:
+                    #    to_pass_draft += accepted_tokens
+
             else:
                 
                 last_token_id = all_token_ids[-1]
                 input_for_target = torch.tensor([[last_token_id]], device=self.device)
 
                 with torch.no_grad():
-                    target_outputs = self.target_model(input_for_target, use_cache=True, return_dict=True, past_key_values=target_past_key_values)
+                    target_outputs = self.target_model(input_for_target, use_cache=True, return_dict=True, past_key_values=target_past_key_values, temperature=temperature)
                 target_past_key_values = target_outputs.past_key_values
                 target_logits = target_outputs.logits
                 target_probs = self.sample(target_logits, temperature, top_k, top_p)
@@ -269,7 +343,7 @@ class SpeculativeDecoder:
 
             if stop_token in new_token_ids:
                 stop_index = new_token_ids.index(stop_token)  
-                new_token_ids = new_token_ids[:stop_index]
+                new_token_ids = new_token_ids[:(stop_index+1)]
                 to_break = True
              
             all_token_ids.extend(new_token_ids)
@@ -277,6 +351,10 @@ class SpeculativeDecoder:
             total_generated += len(new_token_ids)
             added_size = len(new_token_ids)
             gamma = stored_gamma
+
+            #print("")
+
+            #print("CURRENT:", self.tokenizer.decode(torch.tensor(all_token_ids), skip_special_tokens=True))
 
             if to_break:
                 break
@@ -304,9 +382,14 @@ class SpeculativeDecoder:
         self.total_generated += len(all_token_ids) - prompt_length
         self.summed_copied += self.total_accepted
 
+        if self.use_specdec and self.total_spec != 0:
+            print("We used the draft model for ", self.total_spec, "tokens, accepting", (self.accepted_spec/self.total_spec*100), "out of", delta, "overall.")
         print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
         print("We attempted to copy", self.total_query, "times")
-        print("Out of those we accepted ", (self.summed_query/self.total_query), "tokens for each 100 tokens")
+        if self.total_query == 0:
+            print("Didn't attempt to copy!")
+        else:
+            print("Out of those we accepted ", (self.summed_query/self.total_query), "tokens for each 100 tokens")
 
         all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
         all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)
@@ -362,16 +445,16 @@ class SpeculativeDecoder:
     def target_generate_greedy_raw(self, prompt, max_new_tokens=50):
         # Greedy decoding with the draft model
         model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens)
+        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
         return greedy_output
 
     def target_generate_greedy(self, prompt, max_new_tokens=50):
-        return self.tokenizer.decode(self.target_generate_greedy_raw(prompt, max_new_tokens)[0])
+        return self.tokenizer.decode(self.target_generate_greedy_raw(prompt, max_new_tokens, do_sample=False)[0])
 
     def draft_generate_greedy(self, prompt, max_new_tokens=50):
         # Greedy decoding with the draft model
         model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.draft_model.generate(**model_inputs, max_new_tokens=max_new_tokens)
+        greedy_output = self.draft_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
         return self.tokenizer.decode(greedy_output[0])
 
 

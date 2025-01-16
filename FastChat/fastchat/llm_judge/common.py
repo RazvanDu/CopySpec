@@ -89,8 +89,11 @@ def load_questions(question_file: str, begin: Optional[int], end: Optional[int])
     """Load questions from a file."""
     questions = []
     print("LOADING!!")
+    crr_line = 0
     with open(question_file, "r") as ques_file:
         for line in ques_file:
+            #print(crr_line)
+            crr_line += 1
             if line:
                 questions.append(json.loads(line))
     questions = questions[begin:end]

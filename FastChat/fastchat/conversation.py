@@ -704,6 +704,11 @@ def register_conv_template(template: Conversation, override: bool = False):
 
     conv_templates[template.name] = template
 
+def update_one_shot(one_shot: bool):
+
+    if one_shot:
+        conv_templates["zero_shot"] = conv_templates["one_shot"]
+
 
 def get_conv_template(name: str) -> Conversation:
     """Get a conversation template."""

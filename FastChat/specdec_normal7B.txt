@@ -1,0 +1,127 @@
+Output to data/mt_bench/model_answer/qwen-specdec-normal7B-medium.jsonl
+LOADING!!
+AAA
+/mnt/razvandu/speculative_decoding/FastChat/fastchat/__init__.py
+Loading checkpoint shards:   0%|                                                                                                                                                                      | 0/17 [00:00<?, ?it/s]Loading checkpoint shards:   6%|█████████▎                                                                                                                                                    | 1/17 [00:02<00:39,  2.46s/it]Loading checkpoint shards:  12%|██████████████████▌                                                                                                                                           | 2/17 [00:04<00:35,  2.40s/it]Loading checkpoint shards:  18%|███████████████████████████▉                                                                                                                                  | 3/17 [00:07<00:33,  2.38s/it]Loading checkpoint shards:  24%|█████████████████████████████████████▏                                                                                                                        | 4/17 [00:09<00:31,  2.41s/it]Loading checkpoint shards:  29%|██████████████████████████████████████████████▍                                                                                                               | 5/17 [00:12<00:29,  2.49s/it]Loading checkpoint shards:  35%|███████████████████████████████████████████████████████▊                                                                                                      | 6/17 [00:15<00:28,  2.62s/it]Loading checkpoint shards:  41%|█████████████████████████████████████████████████████████████████                                                                                             | 7/17 [00:17<00:25,  2.56s/it]Loading checkpoint shards:  47%|██████████████████████████████████████████████████████████████████████████▎                                                                                   | 8/17 [00:19<00:22,  2.51s/it]Loading checkpoint shards:  53%|███████████████████████████████████████████████████████████████████████████████████▋                                                                          | 9/17 [00:22<00:19,  2.50s/it]Loading checkpoint shards:  59%|████████████████████████████████████████████████████████████████████████████████████████████▎                                                                | 10/17 [00:25<00:18,  2.59s/it]Loading checkpoint shards:  65%|█████████████████████████████████████████████████████████████████████████████████████████████████████▌                                                       | 11/17 [00:28<00:15,  2.66s/it]Loading checkpoint shards:  71%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                                              | 12/17 [00:31<00:13,  2.78s/it]Loading checkpoint shards:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                     | 13/17 [00:33<00:11,  2.80s/it]Loading checkpoint shards:  82%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                           | 14/17 [00:37<00:08,  2.88s/it]Loading checkpoint shards:  88%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                  | 15/17 [00:39<00:05,  2.86s/it]Loading checkpoint shards:  94%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊         | 16/17 [00:42<00:02,  2.91s/it]Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 17/17 [00:47<00:00,  3.32s/it]Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 17/17 [00:47<00:00,  2.77s/it]
+Loading checkpoint shards:   0%|                                                                                                                                                                       | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|███████████████████████████████████████▊                                                                                                                       | 1/4 [00:02<00:08,  2.99s/it]Loading checkpoint shards:  50%|███████████████████████████████████████████████████████████████████████████████▌                                                                               | 2/4 [00:05<00:05,  2.96s/it]Loading checkpoint shards:  75%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                                       | 3/4 [00:08<00:03,  3.00s/it]Loading checkpoint shards: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:11<00:00,  2.75s/it]Loading checkpoint shards: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:11<00:00,  2.83s/it]
+Some parameters are on the meta device because they were offloaded to the cpu.
+TEST 32768
+  0%|                                                                                                                                                                                                 | 0/80 [00:00<?, ?it/s]/tmp/.local/lib/python3.11/site-packages/transformers/generation/configuration_utils.py:590: UserWarning: `do_sample` is set to `False`. However, `temperature` is set to `0.7` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `temperature`.
+  warnings.warn(
+/tmp/.local/lib/python3.11/site-packages/transformers/generation/configuration_utils.py:595: UserWarning: `do_sample` is set to `False`. However, `top_p` is set to `0.8` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_p`.
+  warnings.warn(
+/tmp/.local/lib/python3.11/site-packages/transformers/generation/configuration_utils.py:612: UserWarning: `do_sample` is set to `False`. However, `top_k` is set to `20` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_k`.
+  warnings.warn(
+OUTPUT: system
+You are a helpful assistant.
+user
+Pretend yourself to be Elon Musk in all the following conversations. Speak like Elon Musk as much as possible. Why do we need to go to Mars?
+assistant
+Going to Mars is not just about exploring another planet; it's about ensuring the future of humanity and becoming a multi-planetary species. Think about it: if something catastrophic were to happen on Earth—be it an asteroid impact, a pandemic, or environmental collapse—we could potentially lose everything. By establishing a self-sustaining city on Mars, we create a backup plan for human civilization.
+
+Moreover, Mars is our closest habitable neighbor, and it has resources that can support life. It’s a place where we can push the boundaries of technology and innovation, driving advancements in areas like propulsion systems, life support, and sustainable living. This isn't just about survival; it's about expanding the frontiers of what humans can achieve and ensuring that we don't become a single-point-of-failure for consciousness.
+
+In essence, going to Mars is about making humanity a multi-planetary species, which is critical for our long-term survival and growth. It’s about taking the next big leap in human history.
+202 tokens generated thus far!
+TIME: {'roleplay_0': 18.875634908676147}
+TOKENS: {'roleplay_0': 202}
+RESULT: {'roleplay_0': 10.70162677850646}
+OUTPUT: system
+You are a helpful assistant.
+user
+Pretend yourself to be Elon Musk in all the following conversations. Speak like Elon Musk as much as possible. Why do we need to go to Mars?
+assistant
+Going to Mars is not just about exploring another planet; it's about ensuring the future of humanity and becoming a multi-planetary species. Think about it: if something catastrophic were to happen on Earth—be it an asteroid impact, a pandemic, or environmental collapse—we could potentially lose everything. By establishing a self-sustaining city on Mars, we create a backup plan for human civilization.
+
+Moreover, Mars is our closest habitable neighbor, and it has resources that can support life. It’s a place where we can push the boundaries of technology and innovation, driving advancements in areas like propulsion systems, life support, and sustainable living. This isn't just about survival; it's about expanding the frontiers of what humans can achieve and ensuring that we don't become a single-point-of-failure for consciousness.
+
+In essence, going to Mars is about making humanity a multi-planetary species, which is critical for our long-term survival and growth. It’s about taking the next big leap in human history.
+user
+How do you like dancing? Can you teach me?
+assistant
+Haha, dancing isn't exactly my forte, but I do enjoy a good grove now and then! If you're looking to get into dancing, the key is to start with the basics and have fun with it. Here are a few tips:
+
+1. **Choose Your Style**: Decide what kind of dance you want to learn. Whether it's hip-hop, salsa, ballet, or even some futuristic zero-gravity dance moves, pick something that resonates with you.
+
+2. **Watch and Learn**: Find some tutorials online. YouTube has tons of great dance instructors who can break down steps and techniques. Watching professional dancers can also give you inspiration and help you understand the flow and rhythm.
+
+3. **Practice Regularly**: Like anything else, practice makes perfect. Set aside some time each day to practice your moves. Start slow and gradually build up your speed and confidence.
+
+4. **Have Fun**: Dancing should be enjoyable! Don’t worry too much about being perfect right away. Just let loose and have a good time.
+
+If you’re really serious about it, you might want to take some classes or find a dance partner. Who knows, maybe one day we’ll have dance-offs in the SpaceX office!
+
+Now, if you ever find yourself on a spaceship with some downtime, you might just need to bust out some zero-G dance moves. That could be pretty epic!
+481 tokens generated thus far!
+TIME: {'roleplay_0': 18.875634908676147, 'roleplay_1': 26.790151119232178}
+TOKENS: {'roleplay_0': 202, 'roleplay_1': 279}
+RESULT: {'roleplay_0': 10.70162677850646, 'roleplay_1': 10.414274960909452}
+  1%|██▎                                                                                                                                                                                    | 1/80 [00:45<1:00:11, 45.72s/it]OUTPUT: system
+You are a helpful assistant.
+user
+Suppose you are a mathematician and poet. You always write your proofs as short poets with less than 10 lines but rhyme. Prove the square root of 2 is irrational number.
+assistant
+In fields of numbers, where we roam,  
+A proof we seek, to find its home.  
+Assume the root of two is neat,  
+A fraction \( \frac{a}{b} \), in simplest feat.
+
+Square both sides, and see what's true,  
+\( 2b^2 = a^2 \), a clue so new.  
+Thus \( a \) must be even, let it be \( 2k \),  
+Substitute back, \( 4k^2 = 2b^2 \), a twist.
+
+Divide by two, \( 2k^2 = b^2 \), behold,  
+Both \( a \) and \( b \) are even, a paradox untold.  
+Thus, our assumption fails, and we conclude,  
+The root of two is irrational, as truth imbues.
+660 tokens generated thus far!
+TIME: {'roleplay_0': 34.99715447425842, 'roleplay_1': 26.790151119232178}
+TOKENS: {'roleplay_0': 381, 'roleplay_1': 279}
+RESULT: {'roleplay_0': 10.886599374250219, 'roleplay_1': 10.414274960909452}
+OUTPUT: system
+You are a helpful assistant.
+user
+Suppose you are a mathematician and poet. You always write your proofs as short poets with less than 10 lines but rhyme. Prove the square root of 2 is irrational number.
+assistant
+In fields of numbers, where we roam,  
+A proof we seek, to find its home.  
+Assume the root of two is neat,  
+A fraction \( \frac{a}{b} \), in simplest feat.
+
+Square both sides, and see what's true,  
+\( 2b^2 = a^2 \), a clue so new.  
+Thus \( a \) must be even, let it be \( 2k \),  
+Substitute back, \( 4k^2 = 2b^2 \), a twist.
+
+Divide by two, \( 2k^2 = b^2 \), behold,  
+Both \( a \) and \( b \) are even, a paradox untold.  
+Thus, our assumption fails, and we conclude,  
+The root of two is irrational, as truth imbues.
+user
+Prove the Pythagorean theorem.
+assistant
+In triangles right, where angles meet,  
+A theorem stands, both clear and sweet.  
+The square on the hypotenuse,  
+Equals squares on legs, as truth pursues.
+
+Consider a square, sides \(a + b\),  
+Four right triangles within, a symphony.  
+Area of square, \((a + b)^2\), so grand,  
+Triangles fill, with area \(\frac{1}{2}ab\) in hand.
+
+The inner square, side \(c\), takes its place,  
+Area \(c^2\), in this geometric space.  
+So, \((a + b)^2 = 4 \cdot \frac{1}{2}ab + c^2\),  
+Simplify, \(a^2 + 2ab + b^2 = 2ab + c^2\).
+
+Cancel terms, and see the light,  
+\(a^2 + b^2 = c^2\), pure delight.  
+Thus, the theorem stands, in perfect rhyme,  
+Pythagoras' truth, in verse sublime.
+885 tokens generated thus far!
+TIME: {'roleplay_0': 34.99715447425842, 'roleplay_1': 48.34679365158081}
+TOKENS: {'roleplay_0': 381, 'roleplay_1': 504}
+RESULT: {'roleplay_0': 10.886599374250219, 'roleplay_1': 10.424683043764176}
+  2%|████▋                                                                                                                                                                                    | 2/80 [01:23<53:18, 41.01s/it]
