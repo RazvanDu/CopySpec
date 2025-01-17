@@ -375,6 +375,7 @@ class SpeculativeDecoder:
             gamma = stored_gamma
 
         #print("!!!", (len(all_token_ids)-prompt_length))
+        print("!!!", max_new_tokens)
 
         if len(all_token_ids) > max_new_tokens+prompt_length:
             all_token_ids = all_token_ids[0:(max_new_tokens+prompt_length)]
@@ -398,9 +399,9 @@ class SpeculativeDecoder:
 
     def generate(self, prompt, temperature=0.0, top_k=0, top_p=1.0, k=10, gamma=5, max_new_tokens=100):
 
-        all_token_ids, _ = self.generate_raw_regenerateKV(prompt, temperature, top_k, top_p, k, gamma, max_new_tokens)
+        all_token_ids, _ = self.generate_raw(prompt, temperature, top_k, top_p, k, gamma, max_new_tokens=max_new_tokens)
 
-        return self.tokenizer.decode(all_token_ids[0], skip_special_tokens=True), self.total_accepted
+        return self.tokenizer.decode(all_token_ids[0]), self.total_accepted
 
 
     def target_generate_greedy_temp(self, prompt, max_new_tokens=50):
@@ -440,22 +441,46 @@ class SpeculativeDecoder:
             )
 
         # Decode the entire generated sequence
-        return self.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+        return self.tokenizer.decode(generated_ids[0])
 
-    def target_generate_greedy_raw(self, prompt, max_new_tokens=50):
-        # Greedy decoding with the draft model
-        model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.target_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
+    def target_generate_greedy_raw(self, prompt, temperature=0.0, top_k=0, top_p=1.0, max_new_tokens=50):
+        print("GENERATING DEFAULT")
+        tokenss = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+        greedy_output = tokenss.squeeze(0).tolist()
+        past_key_values = None
+        stop_token = self.tokenizer.eos_token_id
+
+        # We have to generate the tokens one by one so that we can use the same sampling function to guarantee the same outputs
+        # This doesn't significantly affect performance.
+        for _ in range(max_new_tokens):
+            outputs = self.target_model(
+                tokenss,
+                return_dict=True,
+                past_key_values=past_key_values,
+                use_cache=True
+            )
+            target_logits = outputs.logits
+            target_probs = self.sample(target_logits, temperature, top_k, top_p)
+
+            next_token = torch.multinomial(target_probs[:, -1], 1)
+            greedy_output.append(next_token.item())
+            if greedy_output[-1] == stop_token:
+                break
+
+            tokenss = torch.tensor([[greedy_output[-1]]], device=self.device)
+            past_key_values = outputs.past_key_values
+
+        greedy_output = torch.tensor([greedy_output], device=self.device)
         return greedy_output
 
     def target_generate_greedy(self, prompt, max_new_tokens=50):
-        return self.tokenizer.decode(self.target_generate_greedy_raw(prompt, max_new_tokens, do_sample=False)[0])
+        return self.tokenizer.decode(self.target_generate_greedy_raw(prompt, max_new_tokens)[0])
 
-    def draft_generate_greedy(self, prompt, max_new_tokens=50):
-        # Greedy decoding with the draft model
-        model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        greedy_output = self.draft_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        return self.tokenizer.decode(greedy_output[0])
+    #def draft_generate_greedy(self, prompt, max_new_tokens=50):
+    #    # Greedy decoding with the draft model
+    #    model_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+    #    greedy_output = self.draft_model.generate(**model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
+    #    return self.tokenizer.decode(greedy_output[0])
 
 
 
