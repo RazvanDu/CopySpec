@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 models_cache/
+outputs/
 
 # C extensions
 *.so

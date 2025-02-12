@@ -39,6 +39,7 @@ def run_eval(
     num_choices,
     num_gpus_per_model,
     num_gpus_total,
+    number_copy,
     gamma,
     delta,
     oneshot,
@@ -75,6 +76,7 @@ def run_eval(
                 max_new_token,
                 num_choices,
                 use_copy,
+                number_copy,
                 gamma,
                 delta,
                 oneshot,
@@ -99,6 +101,7 @@ def get_model_answers(
     max_new_token,
     num_choices,
     use_copy,
+    number_copy,
     gamma,
     delta,
     oneshot,
@@ -205,6 +208,7 @@ def get_model_answers(
                         top_p=top_p,
                         gamma=gamma,
                         delta=delta,
+                        number_copy=number_copy,
                         max_new_tokens=max_new_token
                     )
                     #print("")
@@ -394,6 +398,12 @@ if __name__ == "__main__":
         help="How many completion choices to generate.",
     )
     parser.add_argument(
+        "--number-copy",
+        type=int,
+        default=10,
+        help="How many to tokens to copy every time copying is attempted.",
+    )
+    parser.add_argument(
         "--gamma",
         type=int,
         default=3,
@@ -469,6 +479,7 @@ if __name__ == "__main__":
         max_new_token=args.max_new_token,
         num_choices=args.num_choices,
         use_copy=args.use_copy,
+        number_copy=args.number_copy,
         gamma=args.gamma,
         delta=args.delta,
         oneshot=args.oneshot,
