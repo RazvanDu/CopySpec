@@ -1,8 +1,9 @@
 import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+import os
 
-cache_directory = "place_a_cache_dir_here"
+cache_dir = os.getenv("cache_dir")
 
 import time
 

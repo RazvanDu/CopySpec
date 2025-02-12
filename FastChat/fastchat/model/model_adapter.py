@@ -45,8 +45,9 @@ from fastchat.modules.exllama import ExllamaConfig, load_exllama_model
 from fastchat.modules.xfastertransformer import load_xft_model, XftConfig
 from fastchat.modules.gptq import GptqConfig, load_gptq_quantized
 from fastchat.utils import get_gpu_memory
+import os
 
-cache_directory = "/mnt/razvandu/speculative_decoding/models_cache"
+cache_directory = os.getenv("cache_dir")
 
 # Check an environment variable to check if we should be sharing Peft model
 # weights.  When false we treat all Peft models as separate.
