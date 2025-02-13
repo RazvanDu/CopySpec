@@ -14,7 +14,10 @@ import argparse
 import sys
 
 # Add your custom path
-custom_path = "/mnt/razvandu/speculative_decoding/"
+
+import os
+
+custom_path = os.getenv("speculative_decoding")
 if custom_path not in sys.path:
     sys.path.append(custom_path)
 
