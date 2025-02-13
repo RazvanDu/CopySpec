@@ -392,14 +392,14 @@ class SpeculativeDecoder:
         self.total_generated += len(all_token_ids) - prompt_length
         self.summed_copied += self.total_accepted
 
-        if self.use_specdec and self.total_spec != 0:
-            print("We used the draft model for ", self.total_spec, "tokens, accepting", (self.accepted_spec/self.total_spec*100), "out of", delta, "overall.")
-        print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
-        print("We attempted to copy", self.total_query, "times")
-        if self.total_query == 0:
-            print("Didn't attempt to copy!")
-        else:
-            print("Out of those we accepted ", (self.summed_query/self.total_query), "tokens for each 100 tokens")
+        #if self.use_specdec and self.total_spec != 0:
+        #    print("We used the draft model for ", self.total_spec, "tokens, accepting", (self.accepted_spec/self.total_spec*100), "out of", delta, "overall.")
+        #print("So far we accepted", (self.summed_copied/self.total_generated*100), "out of each 100 tokens")
+        #print("We attempted to copy", self.total_query, "times")
+        #if self.total_query == 0:
+        #    print("Didn't attempt to copy!")
+        #else:
+        #    print("Out of those we accepted ", (self.summed_query/self.total_query), "tokens for each 100 tokens")
 
         all_token_ids_tensor = torch.tensor(all_token_ids, dtype=torch.long)
         all_token_ids_tensor = all_token_ids_tensor.unsqueeze(0)
