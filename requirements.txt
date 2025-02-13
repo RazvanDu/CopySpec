@@ -44,7 +44,6 @@ filelock==3.13.4
 fire==0.7.0
 fqdn==1.5.1
 frozenlist==1.4.1
--e git+https://github.com/RazvanDu/SpeculativeCopying.git@34fef0e5f6f1cc77ffd741972f4b80bcf6c7d943#egg=fschat&subdirectory=FastChat
 fsspec==2024.2.0
 gekko==1.1.1
 google-ai-generativelanguage==0.6.10
