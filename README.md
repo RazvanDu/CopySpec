@@ -1,6 +1,26 @@
 # CopySpec: Speculative Copying for Faster Transformer Inference
 
-CopySpec enables transformers to copy parts of their answers or parts of the prompt for faster inference without changing the final output. This repository contains the implementation and evaluation scripts.
+## Overview
+
+We introduce **CopySpec**, an innovative technique designed to tackle the inefficiencies large language models (LLMs) face when generating responses that closely resemble previous outputs. **CopySpec** identifies repeated sequences in the model’s chat history and speculates that the same tokens will follow, enabling seamless copying without compromising output quality or requiring additional GPU memory.
+
+To evaluate the effectiveness of our approach, we conducted experiments using **five LLMs** and **five datasets**: **MT-Bench, CNN/DailyMail, GSM-8K, HumanEval, and our newly created dataset, MT-Redundant**. **MT-Redundant**, introduced in this paper, transforms the second turn of MT-Bench into a request for variations of the first turn’s answer, simulating real-world scenarios where users request modifications to prior responses.
+
+Our results demonstrate **significant speed-ups**:
+- **Up to 2.35×** on CNN/DailyMail.
+- **3.08×** on the second turn of select **MT-Redundant** categories.
+- **2.66×** on the third turn of **GSM-8K’s self-correction tasks**.
+- **49% additional speed-up** over speculative decoding on the second turn of **MT-Redundant** across all eight categories.
+
+While LLMs, even with speculative decoding, suffer from slower inference as context sizes grow, **CopySpec leverages the expanded context to accelerate inference, making it faster as the context size increases**.
+
+## MT-Redundant Dataset
+
+The **MT-Redundant** dataset can be downloaded from:
+
+[MT-Redundant Dataset](https://drive.google.com/file/d/1tpYBH7ZY7N4jKzy_kxiJcZbLX8EHQqoS/view?usp=sharing)
+
+To use it, replace the **questions file** in MT-Bench with these new questions.
 
 ## Installation
 
