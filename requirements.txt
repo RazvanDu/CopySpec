@@ -35,7 +35,7 @@ defusedxml==0.7.1
 dill==0.3.8
 distro==1.9.0
 einops==0.7.0
--e git+https://github.com/RazvanDu/evalplus@d47fcf888e85af6fb696afd1f87da82ac5a5d1dc#egg=evalplus
+-e git+https://github.com/RazvanDu/evalplus#egg=evalplus
 evaluate==0.4.0
 executing==2.0.1
 fastapi==0.115.6
