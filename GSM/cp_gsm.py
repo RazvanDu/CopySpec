@@ -17,7 +17,8 @@ import sys
 
 import os
 
-custom_path = os.getenv("speculative_decoding")
+custom_path = os.getenv("copyspec_path")
+print(custom_path)
 if custom_path not in sys.path:
     sys.path.append(custom_path)
 
