@@ -139,6 +139,7 @@ python cp_gsm.py --model-path "Qwen/Qwen2.5-7B-Instruct" --use-copy True --gamma
 
 If you find this work useful, please cite our paper:
 
+```
 @misc{dumitru2025copyspecacceleratingllmsspeculative,
       title={CopySpec: Accelerating LLMs with Speculative Copy-and-Paste Without Compromising Quality}, 
       author={Razvan-Gabriel Dumitru and Minglai Yang and Vikas Yadav and Mihai Surdeanu},
@@ -148,3 +149,4 @@ If you find this work useful, please cite our paper:
       primaryClass={cs.CL},
       url={https://arxiv.org/abs/2502.08923}, 
 }
+```
