@@ -51,19 +51,19 @@ export copyspec_path="/mnt/razvandu/speculative_decoding/"
 To evaluate CopySpec on the **CNN/DailyMail** dataset, navigate to the `CNNDM` directory and run:
 
 ```bash
-python evaluate_cnn.py --model-path "<model-name>" --use-copy <True/False> --gamma <integer>
+python evaluate_cnn.py --model-path "<model-name>" [--use-copy] --gamma <integer>
 ```
 
-Example:
+Example (with CopySpec enabled):
 
 ```bash
-python evaluate_cnn.py --model-path "meta-llama/Llama-3.1-8B-Instruct" --use-copy True --gamma 3
+python evaluate_cnn.py --model-path "meta-llama/Llama-3.1-8B-Instruct" --use-copy --gamma 3
 ```
 
 ### Parameters:
 - `--model-path`: (Required) The Hugging Face model identifier.
-- `--use-copy`: (Optional, default: `False`) Enables speculative copying.
-- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying.
+- `use-copy`: (Optional) Include this flag to enable speculative copying. Omit to disable.
+- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying (required if `--use-copy` is set).
 
 ## Running Evaluation on EvalPlus
 
@@ -100,20 +100,25 @@ pip install -e .
 Then, run the evaluation command:
 
 ```bash
-python fastchat/llm_judge/gen_model_answer.py --model-path "<model-name>" --model-id <model-id> --use-copy <True/False> --gamma <integer> --use-redundant <True/False>
+python fastchat/llm_judge/gen_model_answer.py --model-path "<model-name>" --model-id <model-id> [--use-copy] --gamma <integer> [--use-redundant]
 ```
 
-Example:
+Example (with CopySpec on MT-Redundant):
 
 ```bash
-python fastchat/llm_judge/gen_model_answer.py --model-path "meta-llama/Llama-3.1-8B-Instruct" --model-id "llama3-8B-experiments-redundant-copy" --use-copy True --gamma 3 --use-redundant True
+python fastchat/llm_judge/gen_model_answer.py \
+  --model-path "meta-llama/Llama-3.1-8B-Instruct" \
+  --model-id "llama3-8B-experiments-redundant-copy" \
+  --use-copy \
+  --gamma 3 \
+  --use-redundant
 ```
 
 ### Parameters:
 - `--model-path`: (Required) The Hugging Face model identifier.
 - `--model-id`: (Required) The identifier used for experiments.
-- `--use-copy`: (Optional, default: `False`) Enables speculative copying.
-- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying (required if `--use-copy True` is set).
+- `use-copy`: (Optional) Include this flag to enable speculative copying. Omit to disable.
+- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying (required if `--use-copy` is set).
 - `--use-redundant`: (Optional, default: `False`) If set to `True`, uses the **MT-Redundant** dataset instead of **MT-Bench**.
 
 ## Running GSM
@@ -121,19 +126,19 @@ python fastchat/llm_judge/gen_model_answer.py --model-path "meta-llama/Llama-3.1
 To evaluate CopySpec on the **GSM** dataset, navigate to the `GSM` directory and run:
 
 ```bash
-python cp_gsm.py --model-path "<model-name>" --use-copy <True/False> --gamma <integer>
+python cp_gsm.py --model-path "<model-name>" [--use-copy] --gamma <integer>
 ```
 
 Example:
 
 ```bash
-python cp_gsm.py --model-path "Qwen/Qwen2.5-7B-Instruct" --use-copy True --gamma 3
+python cp_gsm.py --model-path "Qwen/Qwen2.5-7B-Instruct" --use-copy --gamma 3
 ```
 
 ### Parameters:
 - `--model-path`: (Required) The Hugging Face model identifier.
-- `--use-copy`: (Optional, default: `False`) Enables speculative copying.
-- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying (required if `--use-copy True` is set).
+- `use-copy`: (Optional) Include this flag to enable speculative copying. Omit to disable.
+- `--gamma`: (Optional, default: `3`) Sets the number of tokens searched for speculative copying (required if `--use-copy` is set).
 
 ## Citation
 
