@@ -53,9 +53,8 @@ def main():
         help="The maximum number of new generated tokens.",
     )
     parser.add_argument(
-        "--use-copy",
-        type=bool,
-        default=False,
+            "--use-copy",
+        action="store_true",
         help="Whether to use copying or not.",
     )
     

@@ -381,8 +381,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--use-copy",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Whether to use copying or not.",
     )
     parser.add_argument(
